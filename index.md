@@ -3,4 +3,4 @@ Progressive Web Apps
 
 ## [Clock](./clock/)
 
-    A simple digital clock.
+A simple digital clock.
