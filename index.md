@@ -1,6 +1,6 @@
 Progressive Web Apps
 --------------------
 
-- [Clock](./clock/)
+## [Clock](./clock/)
 
     A simple digital clock.
