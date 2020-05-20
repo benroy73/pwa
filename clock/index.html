@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Clock</title>
+    <meta name="description" content="A simple digital clock.">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Clock">
+    <link rel="apple-touch-icon" href="clock-192.png">
+    <link rel="shortcut icon" type="image/png" sizes="192x192" href="clock-192.png">
+    <link rel="manifest" href="manifest.json">
+
+    <style type="text/css">
+      @import url('https://fonts.googleapis.com/css?family=Orbitron');
+      @import url('https://fonts.googleapis.com/css?family=Roboto+Mono');
+      @import url('https://fonts.googleapis.com/css?family=Ubuntu+Mono');
+      @import url('https://fontlibrary.org/face/lcd');
+
+      html, body {
+        height: 100%;
+        margin: 0px;
+      }
+      body {
+        background-color: #121212;
+        font-family: 'Roboto Mono', 'Ubuntu Mono', 'Orbitron', 'LCD14', 'sans-serif';
+      }
+      #vcenter {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        text-align: center;
+        width: 100%;
+      }
+      #clock {
+        font-size: 26vw;
+        text-align: center;
+      }
+      #seconds {
+        font-size: 14vw;
+      }
+      #date {
+        position: fixed;
+        top: 0;
+        left: 0;
+        font-size: 6vw;
+        height: 12vh;
+        padding-left: .25em;
+      }
+      #am_pm {
+        position: fixed;
+        bottom: 0;
+        right: 0;
+        height: 20vh;
+        width: 20vh;
+        font-size: 6vw;
+      }
+    </style>
+  </head>
+  <body style="color:red">
+    <div id="date" onclick="changeColor();"></div>
+    <div id="vcenter">
+      <span id="clock">
+        <span
+          id="hours"></span><span
+          id="hm_seperator">:</span><span
+          id="minutes" onclick="toogleSeconds();"></span><span
+          id="seconds" onclick="toogleSeconds();" style="display:none"></span>
+      </span>
+    </div>
+    <div id="am_pm" onclick="changeFont();"></div>
+
+    <script>
+      var color_index = 0;
+      function changeColor() {
+        var colors = ['hotpink', 'red', 'green', 'blue'];
+        color_index++;
+        if (color_index >= colors.length) {
+          color_index = 0;
+        }
+        var body = document.getElementsByTagName("body")[0];
+        body.style.color = colors[color_index];
+      }
+
+      var font_index = 0;
+      function changeFont() {
+        var fonts = ['Roboto Mono', 'Ubuntu Mono', 'Orbitron', 'LCD14', 'sans-serif'];
+        font_index++;
+        if (font_index >= fonts.length) {
+          font_index = 0;
+        }
+        var body = document.getElementsByTagName("body")[0];
+        body.style.fontFamily = "'" + fonts[font_index] + "', sans-serif";
+      }
+
+      function toogleSeconds() {
+        var sec = document.getElementById('seconds');
+        if (sec.style.display === "none") {
+          sec.style.display = "inline";
+        } else {
+          sec.style.display = "none";
+        }
+      }
+
+      function updateDisplay(el_id, text) {
+        if (document.getElementById(el_id).innerText !== text) {
+          document.getElementById(el_id).innerText = text;
+        }
+      }
+
+      function updateClock() {
+        var date = new Date(); /* creating object of Date class */
+        hms = date.toLocaleTimeString().split(' ')[0];
+        hours = hms.split(':')[0];
+        minutes = hms.split(':')[1];
+        sec = hms.split(':')[2];
+
+        updateDisplay("hours", hours);
+        updateDisplay("minutes", minutes);
+        updateDisplay("seconds", sec);
+        updateDisplay("am_pm", date.toLocaleTimeString().split(' ')[1]);
+        updateDisplay("date", date.toDateString());
+      }
+
+      // sync the clock accuracy to a few milliseconds then run it
+      function startClock() {
+        var t = new Date();
+        if (t.getMilliseconds() < 20) { // run
+          clock = setInterval(function(){ updateClock() }, 1000);
+        }
+        else {  // sync
+          setTimeout(function(){ startClock() }, 1);
+        }
+      }
+
+      var clock;
+      updateClock(); // disply clock before it syncs
+      startClock();
+    </script>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./sw.js');
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,23 @@
+{
+    "dir": "ltr",
+    "lang": "en",
+    "name": "Clock",
+    "short_name": "Clock",
+    "description": "A simple digital clock.",
+    "display": "fullscreen",
+    "orientation": "any",
+    "start_url": "index.html",
+    "background_color": "#121212",
+    "icons": [
+        {
+            "src": "clock-192.png",
+            "type": "image/png",
+            "sizes": "192x192"
+        },
+        {
+            "src": "clock-512.png",
+            "type": "image/png",
+            "sizes": "512x512"
+        }
+    ]
+}
