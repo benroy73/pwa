@@ -1,10 +1,26 @@
-Progressive Web Apps
---------------------
+# Web apps
 
-## [Clock](./clock/)
+A collection of web apps I have written or built with LLM tools to do a specific task.
 
-A simple digital clock.
+In most browsers there is an option to "Install page as an app..." which gives you a nice app icon on a mobile phone.
 
-## [HDMI Display](./hdmi-display/)
 
-Use a laptop like an external monitor with a USB HDMI input adapter.
+### [Clock](./clock/)
+
+- A basic full screen digital clock.
+
+### [Power Outage](./power-outage/power-outage.html)
+
+- Check the status of a power outage at your current location.
+
+### [HDMI Display](./hdmi-display/)
+
+- Use a laptop as an external monitor with a cheap USB HDMI capture card.
+
+### [Speaker box designer](./speaker-box-designer/sealed-speaker-box-3d-design.html)
+
+- Design a sealed speaker and calculate the internal volume to match a speaker driver.
+
+### [DSP EQ Room Correction](./dsp-eq-room-correction/dsp-eq-room-correction.html)
+
+- Use a high quality USB microphone to calculate DSP EQ setting for a ESP32 speaker.

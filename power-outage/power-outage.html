@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>⚡ Power Outage Check</title>
+
+  <!-- iOS PWA Meta Tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="⚡ Outage Check" />
+  <meta name="theme-color" content="#0f172a" />
+
+  <!-- Inline Web Manifest for PWA Support -->
+  <link rel="manifest" href='data:application/manifest+json,{"name":"⚡ Power Outage Check","short_name":"⚡ Outages","start_url":".","display":"standalone","background_color":"#0f172a","theme_color":"#0f172a"}' />
+
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent-green: #22c55e;
+      --accent-red: #ef4444;
+      --accent-blue: #38bdf8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom) 16px;
+    }
+
+    header {
+      padding: 24px 0 12px 0;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+
+    header p {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 500px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .status-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background-color: var(--text-muted);
+    }
+
+    .status-icon.clear { background-color: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
+    .status-icon.outage { background-color: var(--accent-red); box-shadow: 0 0 10px var(--accent-red); }
+
+    .coords-info {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    .btn {
+      background-color: var(--accent-blue);
+      color: #0f172a;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 1rem;
+      font-weight: 600;
+      width: 100%;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      margin-top: 12px;
+    }
+
+    .btn:active {
+      opacity: 0.8;
+    }
+
+    .toggle-link {
+      display: inline-block;
+      font-size: 0.8rem;
+      color: var(--accent-blue);
+      text-decoration: underline;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .manual-inputs {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .manual-inputs input {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 10px;
+      color: var(--text-main);
+      font-size: 0.9rem;
+    }
+
+    .outage-item {
+      border-left: 4px solid var(--accent-red);
+      padding-left: 12px;
+      margin-top: 12px;
+    }
+
+    .outage-item h4 {
+      color: var(--accent-red);
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    .outage-detail {
+      font-size: 0.875rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .outage-detail strong {
+      color: var(--text-main);
+    }
+
+    .utility-links {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .utility-link {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 12px 16px;
+      border-radius: 12px;
+      color: var(--accent-blue);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .utility-link:active {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .spinner {
+      border: 3px solid rgba(255, 255, 255, 0.1);
+      border-left-color: var(--accent-blue);
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>⚡ Power Outage Check</h1>
+    <p>Seattle City Light & Puget Sound Energy</p>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="status-badge">
+        <span id="statusIcon" class="status-icon"></span>
+        <span id="statusText">Ready to check location</span>
+      </div>
+      <div id="coordsDisplay" class="coords-info">Tap below to scan current position</div>
+      
+      <button id="checkBtn" class="btn" onclick="getLocationAndCheck()">Check My Location</button>
+
+      <div style="text-align: center;">
+        <span class="toggle-link" onclick="toggleManualEntry()">Enter location manually instead</span>
+      </div>
+
+      <div id="manualEntryBox" style="display: none;">
+        <div class="manual-inputs">
+          <input type="number" id="manualLat" step="any" placeholder="Latitude (e.g. 47.50332)">
+          <input type="number" id="manualLon" step="any" placeholder="Longitude (e.g. -122.16199)">
+        </div>
+        <button class="btn" style="background-color: #334155; color: #f8fafc;" onclick="checkManualCoordinates()">Check Entered Coordinates</button>
+      </div>
+    </div>
+
+    <div id="resultsCard" class="card" style="display: none;">
+      <h3 style="margin-bottom: 12px; font-size: 1.1rem;">Active Outage Details</h3>
+      <div id="resultsContainer"></div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom: 12px; font-size: 1.1rem;">Report an Outage / Maps</h3>
+      <div class="utility-links">
+        <a class="utility-link" href="https://www.seattle.gov/city-light/outages" target="_blank" rel="noopener">
+          <span>Seattle City Light (SCL)</span>
+          <span>Report &rarr;</span>
+        </a>
+        <a class="utility-link" href="https://www.pse.com/outage/outage-map" target="_blank" rel="noopener">
+          <span>Puget Sound Energy (PSE)</span>
+          <span>Report &rarr;</span>
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const SCL_URL = "https://utilisocial.io/datacapable/v2/p/scl/map/events";
+    const PSE_RAW_URL = "https://www.pse.com/api/sitecore/OutageMap/AnonymoussMapListView";
+
+    // // Proxy added to bypass CORS blocking in web browsers for PSE
+    // const PSE_URL = "https://corsproxy.io/?" + encodeURIComponent(PSE_RAW_URL);
+
+    // 520 error
+    // const PSE_RAW_URL = "https://www.pse.com/api/sitecore/OutageMap/AnonymoussMapListView";
+    // const PSE_URL = "https://api.allorigins.win/raw?url=" + encodeURIComponent(PSE_RAW_URL);
+
+    // 522 error
+    // Option A: CodeTabs proxy
+    // const PSE_URL = "https://api.codetabs.com/v1/proxy?quest=" + encodeURIComponent(PSE_RAW_URL);
+
+    // name not resolved
+    // Option B: ThingProxy
+    const PSE_URL = "https://thingproxy.freeboard.io/fetch/" + PSE_RAW_URL;
+
+    function toggleManualEntry() {
+      const box = document.getElementById("manualEntryBox");
+      box.style.display = box.style.display === "none" ? "block" : "none";
+    }
+
+    function latlonToWebMercator(lat, lon) {
+      const x = (lon * 20037508.34) / 180.0;
+      let y = Math.log(Math.tan(((90.0 + lat) * Math.PI) / 360.0)) / (Math.PI / 180.0);
+      y = (y * 20037508.34) / 180.0;
+      return [x, y];
+    }
+
+    function ringContains(ring, x, y) {
+      let inside = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const xi = ring[i][0], yi = ring[i][1];
+        const xj = ring[j][0], yj = ring[j][1];
+        const intersect = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    }
+
+    function formatEpochMs(ms) {
+      if (!ms) return "TBD";
+      try {
+        const d = new Date(Number(ms));
+        return d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      } catch (e) {
+        return "TBD";
+      }
+    }
+
+    async function checkSCL(lat, lon) {
+      try {
+        const res = await fetch(SCL_URL);
+        const data = await res.json();
+        if (!Array.isArray(data)) return [];
+
+        const [targetX, targetY] = latlonToWebMercator(lat, lon);
+        const matches = [];
+
+        for (const item of data) {
+          const rings = [];
+          const rawRings = item.polygons?.rings || [];
+          for (const r of rawRings) {
+            if (Array.isArray(r) && r.length >= 3) rings.push(r);
+          }
+
+          let isInside = false;
+          if (rings.length > 0) {
+            isInside = rings.some(r => ringContains(r, targetX, targetY) || ringContains(r, lon, lat));
+          }
+
+          if (!isInside && item.latitude && item.longitude) {
+            const dist = Math.hypot(lat - item.latitude, lon - item.longitude);
+            if (dist <= 0.003) isInside = true;
+          }
+
+          if (isInside) {
+            matches.push({
+              provider: "Seattle City Light",
+              id: item.identifier || item.id || "N/A",
+              status: item.status || "Active",
+              cause: item.cause || "Under Investigation",
+              customers: item.numPeople || "N/A",
+              ert: formatEpochMs(item.etrTime)
+            });
+          }
+        }
+        return matches;
+      } catch (e) {
+        console.error("SCL fetch failed:", e);
+        return [];
+      }
+    }
+
+    async function checkPSE(lat, lon) {
+      try {
+        const res = await fetch(PSE_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data || !Array.isArray(data.PseMap)) return [];
+
+        const matches = [];
+        for (const item of data.PseMap) {
+          const providerBlock = item.DataProvider || {};
+          const poi = providerBlock.PointOfInterest || {};
+          const attrs = {};
+          
+          (providerBlock.Attributes || []).forEach(attr => {
+            if (attr.Name) attrs[attr.Name.trim().toLowerCase()] = attr.Value;
+          });
+
+          const ring = (item.Polygon || []).map(pt => [Number(pt.Longitude), Number(pt.Latitude)]);
+          let isInside = ring.length >= 3 ? ringContains(ring, lon, lat) : false;
+
+          if (!isInside && poi.Latitude && poi.Longitude) {
+            const dist = Math.hypot(lat - Number(poi.Latitude), lon - Number(poi.Longitude));
+            if (dist <= 0.003) isInside = true;
+          }
+
+          if (isInside) {
+            matches.push({
+              provider: "Puget Sound Energy",
+              id: attrs["outage id"] || poi.Id || "N/A",
+              status: attrs["status"] || "Active",
+              cause: attrs["cause"] || "Under Investigation",
+              customers: attrs["customers impacted"] || "N/A",
+              ert: attrs["est. restoration time"] || "TBD"
+            });
+          }
+        }
+        return matches;
+      } catch (e) {
+        console.error("PSE fetch failed:", e);
+        return [];
+      }
+    }
+
+    async function executeCheck(lat, lon) {
+      const statusIcon = document.getElementById("statusIcon");
+      const statusText = document.getElementById("statusText");
+      const coordsDisplay = document.getElementById("coordsDisplay");
+      const resultsCard = document.getElementById("resultsCard");
+      const resultsContainer = document.getElementById("resultsContainer");
+
+      statusIcon.className = "status-icon";
+      statusText.innerHTML = '<span class="spinner"></span> Querying SCL & PSE...';
+      coordsDisplay.innerText = `Testing: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+
+      const [sclOutages, pseOutages] = await Promise.all([
+        checkSCL(lat, lon),
+        checkPSE(lat, lon)
+      ]);
+
+      const allOutages = [...sclOutages, ...pseOutages];
+
+      if (allOutages.length > 0) {
+        statusIcon.className = "status-icon outage";
+        statusText.innerText = `Outage Detected (${allOutages.length})`;
+        
+        resultsContainer.innerHTML = allOutages.map(o => `
+          <div class="outage-item">
+            <h4>${o.provider} (ID: ${o.id})</h4>
+            <div class="outage-detail">
+              <strong>Status:</strong> ${o.status}<br/>
+              <strong>Est. Restoration (ETR):</strong> ${o.ert}<br/>
+              <strong>Customers Affected:</strong> ${o.customers}<br/>
+              <strong>Cause:</strong> ${o.cause}
+            </div>
+          </div>
+        `).join("");
+        
+        resultsCard.style.display = "block";
+      } else {
+        statusIcon.className = "status-icon clear";
+        statusText.innerText = "No Active Outage Found";
+        resultsCard.style.display = "none";
+      }
+    }
+
+    function checkManualCoordinates() {
+      const latVal = parseFloat(document.getElementById("manualLat").value);
+      const lonVal = parseFloat(document.getElementById("manualLon").value);
+
+      if (isNaN(latVal) || isNaN(lonVal)) {
+        alert("Please enter valid numerical latitude and longitude coordinates.");
+        return;
+      }
+
+      executeCheck(latVal, lonVal);
+    }
+
+    function getLocationAndCheck() {
+      const statusIcon = document.getElementById("statusIcon");
+      const statusText = document.getElementById("statusText");
+      const coordsDisplay = document.getElementById("coordsDisplay");
+
+      if (!navigator.geolocation) {
+        statusText.innerText = "Geolocation not supported";
+        return;
+      }
+
+      statusIcon.className = "status-icon";
+      statusText.innerHTML = '<span class="spinner"></span> Requesting Location...';
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          executeCheck(pos.coords.latitude, pos.coords.longitude);
+        },
+        (err) => {
+          statusIcon.className = "status-icon";
+          statusText.innerText = "Location access denied";
+          coordsDisplay.innerText = "Use manual coordinate entry below instead.";
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+  </script>
+</body>
+</html>

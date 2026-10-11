@@ -1,3 +1,5 @@
-# pwa (Progressive Web Apps)
+# pwa -- web apps
 
-A place for my PWA apps.
+Code for my web apps.
+
+Hosted by Gitlab pages at [benroy73.github.io/pwa/](https://benroy73.github.io/pwa/)

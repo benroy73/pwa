@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standalone 3D Speaker Blueprint & Cut List Generator</title>
+
+    <script>
+        const DEFAULTS = {
+            // --- MAIN ENCLOSURE DIMENSIONS (INCHES) ---
+            thickness: 0.625,   // Thickness of the MDF/plywood material used for constructing the panels
+            'base-w': 10.750,   // Overall width of the bottom mounting base plate
+            'base-flange': 0.500,// Overhang/flange margin for the base plate offset
+            'main-w': 5.500,    // Exterior width of the main speaker box enclosure
+            'main-h': 5.500,    // Exterior height of the main speaker box enclosure
+            'main-d': 5.000,    // Exterior depth of the main speaker box enclosure
+            'hole-dia': 3.000,  // Diameter of the front baffle circular speaker driver mounting hole
+
+            // --- EXTENSION POCKET DIMENSIONS (INCHES) ---
+            'ext-w': 4.250,     // Exterior width of the secondary side extension pocket
+            'ext-d': 3.000,     // Exterior depth of the secondary side extension pocket
+            'route-d': 0.250,   // Depth of acoustic internal routing pockets cut into interior panel walls
+
+            // --- TOGGLES & ACOUSTIC TUNING CONTROLS ---
+            addExtension: true,         // Enable or disable rendering of the secondary extension pocket enclosure
+            polyfillEfficiency: 1.14,   // Volumetric efficiency multiplier gained from polyfill dampening (e.g., 1.14 = +14% airspace)
+            routerCoverage: 0.50,       // Fractional surface area coverage ratio for router pocket depth tuning (0.0 to 1.0)
+            panelOpacity: 0.80,         // Initial opacity level for rendering 3D panel meshes (0.1 transparent to 1.0 solid)
+
+            // --- INITIAL DISPLAY & INTERFACE TOGGLES ---
+            showLabels: true,   // Show or hide floating 3D panel text dimension labels in the viewport
+            showCutlist: true,  // Show or hide the text-based panel cut list and acoustic specification overlay
+            showMetrics: false  // Toggle metric unit display (millimeters/sq cm) vs imperial display (inches/sq in)
+        };
+    </script>
+
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            background-color: #121212; 
+            overflow: hidden; 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+        }
+        
+        #info-panel { 
+            position: absolute; 
+            top: 15px; 
+            left: 15px; 
+            background: rgba(0, 0, 0, 0.88); 
+            padding: 16px; 
+            border-radius: 8px; 
+            border: 1px solid #333; 
+            color: #fff; 
+            width: 330px; 
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 10; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+        }
+
+        .panel-header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #panel-toggle {
+            background: #222;
+            border: 1px solid #444;
+            color: #00adb5;
+            width: 26px;
+            height: 26px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 11px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        #panel-toggle:hover {
+            background: #333;
+            border-color: #00adb5;
+        }
+
+        #panel-content {
+            transition: max-height 0.3s ease, opacity 0.2s ease;
+            max-height: 2000px;
+            opacity: 1;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        #info-panel.collapsed #panel-content {
+            max-height: 0;
+            opacity: 0;
+            margin-top: 0;
+            pointer-events: none;
+        }
+
+        h3 { 
+            margin: 0; 
+            color: #00adb5; 
+            font-size: 13px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+        }
+
+        .control-group { 
+            margin-top: 10px; 
+            border-top: 1px solid #333; 
+            padding-top: 10px; 
+        }
+
+        .param-row {
+            display: grid;
+            grid-template-columns: 1fr 65px 65px;
+            gap: 6px;
+            align-items: center;
+            margin-bottom: 6px;
+            font-size: 11px;
+            color: #ccc;
+        }
+
+        .param-header {
+            display: grid;
+            grid-template-columns: 1fr 65px 65px;
+            gap: 6px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #00adb5;
+            margin-bottom: 6px;
+            text-align: center;
+        }
+
+        .param-header span:first-child {
+            text-align: left;
+        }
+
+        label { 
+            font-size: 11px; 
+            color: #ccc; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px; 
+            cursor: pointer; 
+        }
+
+        input[type=number] {
+            background: #222;
+            border: 1px solid #444;
+            color: #00fff2;
+            padding: 3px 4px;
+            border-radius: 4px;
+            width: 100%;
+            font-size: 11px;
+            text-align: right;
+            box-sizing: border-box;
+        }
+
+        input[type=range] { 
+            width: 100%; 
+            cursor: pointer; 
+            margin-top: 4px;
+        }
+
+        input[type=checkbox] {
+            cursor: pointer;
+            accent-color: #00adb5;
+        }
+
+        #controls-hint { 
+            position: absolute; 
+            bottom: 15px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: rgba(0, 0, 0, 0.75); 
+            padding: 8px 16px; 
+            border-radius: 20px; 
+            font-size: 12px; 
+            color: #aaa; 
+            border: 1px solid #444; 
+            pointer-events: none; 
+            z-index: 10; 
+        }
+
+        .panel-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00fff2;
+            padding: 3px 7px;
+            border-radius: 4px;
+            border: 1px solid #00fff2;
+            font-size: 11px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.1s ease;
+        }
+
+        #report-overlay {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 480px;
+            max-height: 88vh;
+            background: rgba(10, 15, 25, 0.94);
+            border: 1px solid #00adb5;
+            border-radius: 8px;
+            padding: 15px;
+            color: #00fff2;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            white-space: pre;
+            overflow-y: auto;
+            z-index: 20;
+            box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.8);
+        }
+    </style>
+    <!-- Three.js Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="info-panel">
+        <div class="panel-header-row">
+            <h3>Blueprint Parameters</h3>
+            <button id="panel-toggle" title="Toggle Blueprint Parameters">▲</button>
+        </div>
+
+        <div id="panel-content">
+            <div class="param-header">
+                <span>PARAMETER</span>
+                <span>INCHES</span>
+                <span>MM</span>
+            </div>
+
+            <div class="param-row">
+                <span>Board Thickness</span>
+                <input type="number" data-param="thickness" data-unit="in" step="0.0625">
+                <input type="number" data-param="thickness" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Base Board Width</span>
+                <input type="number" data-param="base-w" data-unit="in" step="0.125">
+                <input type="number" data-param="base-w" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Base Board Flange</span>
+                <input type="number" data-param="base-flange" data-unit="in" step="0.0625">
+                <input type="number" data-param="base-flange" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Main Box Width</span>
+                <input type="number" data-param="main-w" data-unit="in" step="0.125">
+                <input type="number" data-param="main-w" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Main Box Height</span>
+                <input type="number" data-param="main-h" data-unit="in" step="0.125">
+                <input type="number" data-param="main-h" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Main Box Depth</span>
+                <input type="number" data-param="main-d" data-unit="in" step="0.125">
+                <input type="number" data-param="main-d" data-unit="mm" step="1">
+            </div>
+            <div class="param-row">
+                <span>Speaker Cutout Diameter</span>
+                <input type="number" data-param="hole-dia" data-unit="in" step="0.125">
+                <input type="number" data-param="hole-dia" data-unit="mm" step="1">
+            </div>
+
+            <div class="control-group">
+                <h3>Extension Pocket</h3>
+                <label>Enable Extension Pocket <input type="checkbox" id="cfg-add-ext"></label>
+                
+                <div class="param-row">
+                    <span>Extension Width</span>
+                    <input type="number" data-param="ext-w" data-unit="in" step="0.125">
+                    <input type="number" data-param="ext-w" data-unit="mm" step="1">
+                </div>
+                <div class="param-row">
+                    <span>Extension Depth</span>
+                    <input type="number" data-param="ext-d" data-unit="in" step="0.125">
+                    <input type="number" data-param="ext-d" data-unit="mm" step="1">
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Acoustic Tuning</h3>
+                <label>Polyfill Efficiency <input type="number" id="cfg-polyfill" step="0.01" style="width: 65px;"></label>
+                <div class="param-row">
+                    <span>Router Pocket Depth</span>
+                    <input type="number" data-param="route-d" data-unit="in" step="0.05">
+                    <input type="number" data-param="route-d" data-unit="mm" step="1">
+                </div>
+                <label>Router Area Coverage <input type="number" id="cfg-route-cov" min="0" max="1" step="0.05" style="width: 65px;"></label>
+            </div>
+
+            <div class="control-group">
+                <label for="opacity-slider" style="display:block;">Panel Transparency: <span id="opacity-val">80%</span>
+                    <input type="range" id="opacity-slider" min="0.1" max="1.0" step="0.05">
+                </label>
+            </div>
+
+            <div class="control-group">
+                <label><input type="checkbox" id="toggle-labels"> Show Panel Text Labels</label>
+                <label><input type="checkbox" id="toggle-cutlist"> Show Full Cut List Report</label>
+                <label><input type="checkbox" id="toggle-metric-display"> Show Metrics</label>
+            </div>
+        </div>
+    </div>
+    
+    <div id="controls-hint">🖱️ Left Click + Drag to Rotate | Right Click + Drag to Pan | Scroll to Zoom</div>
+    <div id="label-container"></div>
+    <div id="report-overlay"></div>
+
+    <script>
+        // Initialize active dynamic runtime state from DEFAULTS defined in head
+        const params = {
+            thickness: DEFAULTS.thickness,
+            'base-w': DEFAULTS['base-w'],
+            'base-flange': DEFAULTS['base-flange'],
+            'main-w': DEFAULTS['main-w'],
+            'main-h': DEFAULTS['main-h'],
+            'main-d': DEFAULTS['main-d'],
+            'hole-dia': DEFAULTS['hole-dia'],
+            'ext-w': DEFAULTS['ext-w'],
+            'ext-d': DEFAULTS['ext-d'],
+            'route-d': DEFAULTS['route-d']
+        };
+
+        // Populate DOM UI controls with default configuration on load
+        function initUIFromDefaults() {
+            Object.keys(params).forEach(key => {
+                const inInput = document.querySelector(`input[data-param="${key}"][data-unit="in"]`);
+                const mmInput = document.querySelector(`input[data-param="${key}"][data-unit="mm"]`);
+                
+                if (inInput) inInput.value = params[key].toFixed(3);
+                if (mmInput) mmInput.value = Math.round(params[key] * 25.4);
+            });
+
+            document.getElementById('cfg-add-ext').checked = DEFAULTS.addExtension;
+            document.getElementById('cfg-polyfill').value = DEFAULTS.polyfillEfficiency;
+            document.getElementById('cfg-route-cov').value = DEFAULTS.routerCoverage;
+            
+            document.getElementById('opacity-slider').value = DEFAULTS.panelOpacity;
+            document.getElementById('opacity-val').innerText = Math.round(DEFAULTS.panelOpacity * 100) + '%';
+
+            document.getElementById('toggle-labels').checked = DEFAULTS.showLabels;
+            document.getElementById('toggle-cutlist').checked = DEFAULTS.showCutlist;
+            document.getElementById('toggle-metric-display').checked = DEFAULTS.showMetrics;
+        }
+
+        // --- MENU COLLAPSE / EXPAND TOGGLE ---
+        const infoPanel = document.getElementById('info-panel');
+        const panelToggleBtn = document.getElementById('panel-toggle');
+
+        panelToggleBtn.addEventListener('click', () => {
+            const isCollapsed = infoPanel.classList.toggle('collapsed');
+            panelToggleBtn.innerText = isCollapsed ? '▼' : '▲';
+        });
+
+        // --- DUAL COLUMN DYNAMIC INPUT SYNCHRONIZATION ---
+        document.querySelectorAll('input[data-param]').forEach(input => {
+            input.addEventListener('input', (e) => {
+                const paramKey = e.target.getAttribute('data-param');
+                const unit = e.target.getAttribute('data-unit');
+                const val = parseFloat(e.target.value) || 0;
+
+                if (unit === 'in') {
+                    params[paramKey] = val;
+                    const mmInput = document.querySelector(`input[data-param="${paramKey}"][data-unit="mm"]`);
+                    if (mmInput) mmInput.value = Math.round(val * 25.4);
+                } else if (unit === 'mm') {
+                    const inVal = val / 25.4;
+                    params[paramKey] = inVal;
+                    const inInput = document.querySelector(`input[data-param="${paramKey}"][data-unit="in"]`);
+                    if (inInput) inInput.value = inVal.toFixed(3);
+                }
+                updateBlueprint();
+            });
+        });
+
+        // --- THREE.JS SCENE SETUP ---
+        const scene = new THREE.Scene(); 
+        scene.background = new THREE.Color(0x121212);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight); 
+        renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement); 
+        controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); 
+        dirLight.position.set(20, 40, 20); 
+        dirLight.castShadow = true; 
+        scene.add(dirLight);
+
+        const grid = new THREE.GridHelper(30, 30, 0x444444, 0x222222);
+        scene.add(grid);
+
+        let activeMeshes = [];
+        let panelMaterials = [];
+        let labelElements = [];
+
+        function formatUnit(valInInches, isMetric) {
+            return isMetric ? Math.round(valInInches * 25.4).toString() : valInInches.toFixed(3);
+        }
+
+        // --- BLUEPRINT & 3D RENDERING ---
+        function updateBlueprint() {
+            const useMetricDisplay = document.getElementById('toggle-metric-display').checked;
+
+            // Direct Normalized Inch Inputs
+            const t = params.thickness;
+            const base_width = params['base-w'];
+            const overhang = params['base-flange'];
+            const w_main = params['main-w'];
+            const h_main = params['main-h'];
+            const d_main = params['main-d'];
+            const speaker_cutout_dia = params['hole-dia'];
+
+            const ADD_BOX_L_EXTENSION = document.getElementById('cfg-add-ext').checked;
+            const w_ext = params['ext-w'];
+            const d_ext = params['ext-d'];
+
+            const polyfill_boost = parseFloat(document.getElementById('cfg-polyfill').value) || 1.14;
+            const d_route = params['route-d'];
+            const route_coverage = parseFloat(document.getElementById('cfg-route-cov').value) || 0.50;
+
+            // Reset 3D Scene Elements
+            activeMeshes.forEach(m => scene.remove(m));
+            activeMeshes = [];
+            panelMaterials = [];
+            document.getElementById('label-container').innerHTML = '';
+            labelElements = [];
+
+            const unit_label = useMetricDisplay ? "mm" : '"';
+            const vol_unit_label = useMetricDisplay ? "cu cm" : "cu in";
+
+            // Enclosure Calculations
+            const rear_panel_width = ADD_BOX_L_EXTENSION ? ((w_main + w_ext) - t) : (w_main - (2 * t));
+            const ext_top_cap_max_w = w_ext;
+            const main_front_baffle_w = w_main - (2 * t);
+
+            const right_side_depth = d_main;
+            const ext_left_side_depth = d_ext - (2 * t);
+            const main_left_side_depth = d_main - ext_left_side_depth - t;
+
+            const ext_top_cap_w = ext_top_cap_max_w;
+            const ext_front_baffle_w = ext_top_cap_max_w;
+
+            const main_int_w = main_front_baffle_w;
+            const main_int_h = h_main - (2 * t);
+            const main_int_d = d_main - (2 * t);
+            const main_vol_raw = main_int_w * main_int_h * main_int_d;
+
+            let ext_vol_raw = 0;
+            let max_footprint_depth = d_main;
+            let total_interior_sa = 0;
+
+            if (ADD_BOX_L_EXTENSION) {
+                const ext_int_w = ext_front_baffle_w >= t ? ext_front_baffle_w - t : 0;
+                const ext_int_d = ext_left_side_depth;
+                ext_vol_raw = ext_int_w * main_int_h * ext_int_d;
+                max_footprint_depth = Math.max(d_main, d_ext);
+
+                const sa_caps = 2 * ((main_int_w * main_int_d) + (ext_int_w * ext_int_d));
+                const sa_walls = main_int_h * (main_int_w + right_side_depth + ext_front_baffle_w + ext_left_side_depth + main_left_side_depth);
+                total_interior_sa = sa_caps + sa_walls;
+            } else {
+                max_footprint_depth = d_main;
+                total_interior_sa = 2 * ((main_int_w * main_int_d) + (main_int_w * main_int_h) + (main_int_d * main_int_h));
+            }
+
+            // Volumetric Calculations
+            const base_physical_vol = main_vol_raw + ext_vol_raw;
+            const routed_added_vol = total_interior_sa * d_route * route_coverage;
+            const liters_raw = base_physical_vol * 0.0163871;
+            const liters_polyfill = liters_raw * polyfill_boost;
+            const liters_routed = (base_physical_vol + routed_added_vol) * 0.0163871;
+            const liters_combined = liters_routed * polyfill_boost;
+            const polyfill_pct = Math.round((polyfill_boost - 1.0) * 100);
+
+            // Cutlist Definition
+            const uniform_panel_height = h_main - (2 * t);
+            const cutlist = {
+                "Base Board":         { qty: 1, width: base_width, height: max_footprint_depth },
+                "Main Top Cap (Lid)": { qty: 1, width: w_main, height: d_main },
+                "Rear Panel":         { qty: 1, width: rear_panel_width, height: uniform_panel_height },
+                "Main Front Baffle":  { qty: 1, width: main_front_baffle_w, height: uniform_panel_height },
+                "Right Side Panel":   { qty: 1, width: right_side_depth, height: uniform_panel_height },
+            };
+
+            if (ADD_BOX_L_EXTENSION) {
+                cutlist["Extension Top Cap"]      = { qty: 1, width: ext_top_cap_w, height: d_ext };
+                cutlist["Extension Front Baffle"] = { qty: 1, width: ext_front_baffle_w, height: uniform_panel_height };
+                cutlist["Extension Left Side"]    = { qty: 1, width: ext_left_side_depth, height: uniform_panel_height };
+                cutlist["Main Left Side Panel"]   = { qty: 1, width: main_left_side_depth, height: uniform_panel_height };
+            } else {
+                cutlist["Left Side Panel"]        = { qty: 1, width: right_side_depth, height: uniform_panel_height };
+            }
+
+            // Report Output
+            const box_type = ADD_BOX_L_EXTENSION 
+                ? "MODULAR L-SHAPED MODE (EXTENSION ACTIVE)" 
+                : "STANDALONE MODE (EXTENSION CLOSED)";
+            const sa_unit = useMetricDisplay ? "sq cm" : "sq in";
+            const display_sa = useMetricDisplay ? total_interior_sa * 6.4516 : total_interior_sa;
+            const display_vol_raw = useMetricDisplay ? main_vol_raw * 16.3871 : main_vol_raw;
+            const display_ext_vol = useMetricDisplay ? ext_vol_raw * 16.3871 : ext_vol_raw;
+
+            let report = [];
+            report.push("=====================================================");
+            report.push(`📐 BOX DESIGN PROFILE: ${box_type}`);
+            report.push(`🧱 Material Thickness: ${formatUnit(t, useMetricDisplay)}${unit_label}`);
+            report.push(`📏 Base Board Flange: ${formatUnit(overhang, useMetricDisplay)}${unit_label}`);
+            report.push(`🔊 Speaker Cutout Hole: ${formatUnit(speaker_cutout_dia, useMetricDisplay)}${unit_label} Diameter`);
+            report.push("=====================================================");
+            report.push("📦 BASE GEOMETRIC SPECIFICATIONS:");
+            report.push(`  Main Core Airspace:  ${display_vol_raw.toFixed(1)} ${vol_unit_label}`);
+            if (ADD_BOX_L_EXTENSION) {
+                report.push(`  Pocket Airspace:     ${display_ext_vol.toFixed(1)} ${vol_unit_label}`);
+            }
+            report.push(`  Total Surface Area:  ${display_sa.toFixed(1)} ${sa_unit}`);
+            report.push("-----------------------------------------------------");
+            report.push("🔊 ACOUSTIC AIRSPACE CAPACITIES MATRIX:");
+            report.push(`  Plain Raw Enclosure:        👉 ${liters_raw.toFixed(3)} Liters`);
+            report.push(`  + Polyfill Fluff Only:      👉 ${liters_polyfill.toFixed(3)} Liters (+${polyfill_pct}% apparent space)`);
+            report.push(`  + Routed Pockets Only:      👉 ${liters_routed.toFixed(3)} Liters (${formatUnit(d_route, useMetricDisplay)}${unit_label} deep @ ${Math.round(route_coverage*100)}% area)`);
+            report.push(`  + COMBINED BOTH METHODS:    👉 ${liters_combined.toFixed(3)} Liters (Maximum Efficiency)`);
+            report.push("=====================================================\n");
+            report.push("-------------------------------------------------------------------------");
+            report.push(`🪚 REQUIRED MDF CUT LIST (Width x Height)`);
+            report.push("-------------------------------------------------------------------------");
+
+            const padLen = useMetricDisplay ? 4 : 6;
+
+            for (const [panel, dims] of Object.entries(cutlist)) {
+                const w_val = formatUnit(dims.width, useMetricDisplay);
+                const h_val = formatUnit(dims.height, useMetricDisplay);
+                const cutout = panel === "Main Front Baffle" ? ` (Includes ${formatUnit(speaker_cutout_dia, useMetricDisplay)}${unit_label} Center Hole)` : "";
+                report.push(`  [ ] Qty: ${dims.qty}  |  ${String(w_val).padStart(padLen)}  x  ${String(h_val).padStart(padLen)}  --> ${panel}${cutout}`);
+            }
+            report.push("================================================-------------------------");
+
+            document.getElementById('report-overlay').innerText = report.join("\n");
+
+            // --- 3D MESH GENERATION ---
+            const wall_h = h_main - (2 * t);
+            const hole_radius = speaker_cutout_dia / 2.0;
+
+            const main_x_start = base_width - overhang - w_main;
+            const ext_x_start = main_x_start - ext_top_cap_w;
+
+            const rear_x_pos = ADD_BOX_L_EXTENSION 
+                ? ((base_width - overhang - t) - rear_panel_width) 
+                : (main_x_start + t);
+
+            const panels = [
+                { name: "Base Board", w: base_width, h: t, d: max_footprint_depth, x: 0, y: 0, z: 0, color: 0x8B5A2B, lw: base_width, lh: max_footprint_depth },
+                { name: "Right Side Panel", w: t, h: wall_h, d: right_side_depth, x: base_width - overhang - t, y: t, z: 0, color: 0x3B82F6, lw: right_side_depth, lh: wall_h },
+                { name: "Main Front Baffle", w: main_front_baffle_w, h: wall_h, d: t, x: main_x_start + t, y: t, z: d_main - t, color: 0x2563EB, lw: main_front_baffle_w, lh: wall_h, isBaffle: true },
+                { name: "Main Top Cap", w: w_main, h: t, d: d_main, x: main_x_start, y: t + wall_h, z: 0, color: 0x1E3A8A, lw: w_main, lh: d_main },
+                { name: "Rear Panel", w: rear_panel_width, h: wall_h, d: t, x: rear_x_pos, y: t, z: 0, color: 0x1D4ED8, lw: rear_panel_width, lh: wall_h },
+            ];
+
+            if (ADD_BOX_L_EXTENSION) {
+                panels.push(
+                    { name: "Main Left Side Panel", w: t, h: wall_h, d: main_left_side_depth, x: main_x_start, y: t, z: d_main - main_left_side_depth, color: 0x6D28D9, lw: main_left_side_depth, lh: wall_h },
+                    { name: "Extension Left Side", w: t, h: wall_h, d: ext_left_side_depth, x: ext_x_start, y: t, z: t, color: 0x8B5CF6, lw: ext_left_side_depth, lh: wall_h },
+                    { name: "Extension Front Baffle", w: ext_front_baffle_w, h: wall_h, d: t, x: ext_x_start, y: t, z: d_ext - t, color: 0x7C3AED, lw: ext_front_baffle_w, lh: wall_h },
+                    { name: "Extension Top Cap", w: ext_top_cap_w, h: t, d: d_ext, x: ext_x_start, y: t + wall_h, z: 0, color: 0x5B21B6, lw: ext_top_cap_w, lh: d_ext }
+                );
+            } else {
+                // Standalone Box Mode: Single Left Side Panel matching Right Side Panel dimensions
+                panels.push(
+                    { name: "Left Side Panel", w: t, h: wall_h, d: d_main, x: main_x_start, y: t, z: 0, color: 0x6D28D9, lw: d_main, lh: wall_h }
+                );
+            }
+
+            const currentOpacity = parseFloat(document.getElementById('opacity-slider').value);
+
+            panels.forEach(p => {
+                let geo;
+                if (p.isBaffle) {
+                    const shape = new THREE.Shape();
+                    const hw = p.w / 2;
+                    const hh = p.h / 2;
+                    shape.moveTo(-hw, -hh);
+                    shape.lineTo(hw, -hh);
+                    shape.lineTo(hw, hh);
+                    shape.lineTo(-hw, hh);
+                    shape.lineTo(-hw, -hh);
+
+                    const holePath = new THREE.Path();
+                    holePath.absarc(0, 0, hole_radius, 0, Math.PI * 2, true);
+                    shape.holes.push(holePath);
+
+                    geo = new THREE.ExtrudeGeometry(shape, { steps: 1, depth: p.d, bevelEnabled: false });
+                } else {
+                    geo = new THREE.BoxGeometry(p.w, p.h, p.d);
+                }
+
+                const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.4, transparent: true, opacity: currentOpacity });
+                panelMaterials.push(mat);
+
+                const mesh = new THREE.Mesh(geo, mat);
+                const cx = p.x + p.w / 2;
+                const cy = p.y + p.h / 2;
+                const cz = p.z + p.d / 2;
+
+                if (p.isBaffle) {
+                    mesh.position.set(cx, cy, p.z);
+                } else {
+                    mesh.position.set(cx, cy, cz);
+                }
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 }));
+                mesh.add(edges);
+
+                scene.add(mesh);
+                activeMeshes.push(mesh);
+
+                const labelDiv = document.createElement('div');
+                labelDiv.className = 'panel-label';
+                labelDiv.innerText = `${p.name} (${formatUnit(p.lw, useMetricDisplay)}${unit_label} x ${formatUnit(p.lh, useMetricDisplay)}${unit_label})`;
+                document.getElementById('label-container').appendChild(labelDiv);
+                labelElements.push({ element: labelDiv, pos: new THREE.Vector3(cx, cy, cz) });
+            });
+
+            camera.position.set(w_main * 1.8, h_main * 2.2, d_main * 2.8);
+            controls.target.set(base_width / 2, h_main / 2, d_main / 2);
+            controls.update();
+        }
+
+        // --- UI EVENT LISTENERS ---
+        const nonDataInputs = ['cfg-add-ext', 'cfg-polyfill', 'cfg-route-cov', 'toggle-metric-display'];
+        nonDataInputs.forEach(id => {
+            document.getElementById(id).addEventListener('change', updateBlueprint);
+        });
+
+        document.getElementById('opacity-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('opacity-val').innerText = Math.round(val * 100) + '%';
+            panelMaterials.forEach(m => m.opacity = val);
+        });
+
+        const labelsToggle = document.getElementById('toggle-labels');
+        labelsToggle.addEventListener('change', (e) => {
+            const display = e.target.checked ? 'block' : 'none';
+            labelElements.forEach(l => l.element.style.display = display);
+        });
+
+        const cutlistToggle = document.getElementById('toggle-cutlist');
+        const reportOverlay = document.getElementById('report-overlay');
+        cutlistToggle.addEventListener('change', (e) => {
+            reportOverlay.style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        function updateLabels() {
+            if (!labelsToggle.checked) return;
+            const tempV = new THREE.Vector3();
+            labelElements.forEach(labelObj => {
+                tempV.copy(labelObj.pos);
+                tempV.project(camera);
+
+                if (tempV.z > 1) {
+                    labelObj.element.style.opacity = 0;
+                    return;
+                }
+
+                const x = (tempV.x * .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                labelObj.element.style.left = `${x}px`;
+                labelObj.element.style.top = `${y}px`;
+                labelObj.element.style.opacity = 1;
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize UI values from DEFAULTS object and render
+        initUIFromDefaults();
+        updateBlueprint();
+        animate();
+    </script>
+</body>
+</html>

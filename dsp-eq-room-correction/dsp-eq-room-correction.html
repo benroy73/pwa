@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 DSP Acoustic Measurement & REW Exporter</title>
+    <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22ESP32%20DSP%20Tuner%22%2C%22short_name%22%3A%22DSPTuner%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23121214%22%2C%22theme_color%22%3A%22%233b82f6%22%7D">
+    <style>
+        :root {
+            --bg-color: #121214;
+            --surface-color: #1a1a1e;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --text-color: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border-color: #2e2e38;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --card-bg: #222227;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            max-width: 950px;
+            width: 100%;
+            background: var(--surface-color);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            border: 1px solid var(--border-color);
+            box-sizing: border-box;
+        }
+        h1 { margin-top: 0; color: #fff; font-size: 24px; }
+        p { color: var(--text-muted); line-height: 1.5; font-size: 14px; }
+        
+        .top-toolbar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .step-row {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 15px;
+        }
+        .step-title {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--primary-color);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .step-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: flex-end;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-width: 140px;
+        }
+        .form-group label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 6px;
+            color: var(--text-muted);
+        }
+        .form-group select {
+            background: #27272a;
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 9px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: background 0.2s, opacity 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 36px;
+            box-sizing: border-box;
+        }
+        .btn:hover { background-color: var(--primary-hover); }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .btn-success { background-color: var(--success-color); }
+        .btn-success:hover { background-color: #059669; }
+        .btn-secondary { background-color: #4b5563; }
+        .btn-secondary:hover { background-color: #374151; }
+        .btn-danger { background-color: var(--danger-color); }
+        .btn-danger:hover { background-color: #dc2626; }
+
+        .badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            background: #27272a;
+            color: var(--text-muted);
+        }
+        .badge-active { background: #065f46; color: #34d399; }
+
+        .canvas-container {
+            position: relative;
+            background: #09090b;
+            border-radius: 8px;
+            overflow: hidden;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+        }
+        canvas { display: block; width: 100%; height: 320px; }
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px 20px;
+            padding: 10px 14px;
+            border-top: 1px solid var(--border-color);
+            background: #0d0d10;
+            font-size: 12px;
+            color: var(--text-color);
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
+        .legend-item.inactive { opacity: 0.4; }
+        .event-log { margin-top: 15px; font-size: 12px; color: var(--text-muted); }
+        .event-log summary {
+            cursor: pointer;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 12px;
+            color: var(--primary-color);
+        }
+        .event-log pre {
+            margin: 0;
+            max-height: 240px;
+            overflow: auto;
+            background: #09090b;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            font-size: 11px;
+            line-height: 1.5;
+            color: #d4d4d8;
+            white-space: pre-wrap;
+            word-break: break-word;
+            user-select: text;
+            -webkit-user-select: text;
+        }
+        .legend-swatch { display: inline-block; width: 24px; border-top: 3px solid; border-radius: 2px; }
+        .status {
+            padding: 12px;
+            border-radius: 6px;
+            background: #27272a;
+            margin-bottom: 15px;
+            font-size: 13px;
+            color: #e4e4e7;
+            border-left: 4px solid var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>DSP EQ Room Correction Tool</h1>
+    <p>Measure your speaker response, match target profiles, apply smoothing, and export REW text files for your Louder-ESP32 board.</p>
+
+    <!-- SEPARATED TOP TOOLBARS -->
+    <div class="top-toolbar">
+        <!-- Microphone Group -->
+        <div class="step-row" style="background: #18181c; border-color: var(--primary-color); margin-bottom:0;">
+            <div class="step-title">
+                <span style="color: #fff;">Microphone Controls</span>
+                <span id="micStatusBadge" class="badge">Mic Offline</span>
+            </div>
+            <div class="step-controls">
+                <button class="btn" id="btnToggleMic">Start Microphone</button>
+                <button class="btn btn-secondary" id="btnResetPeaks" disabled>Reset Live Peaks</button>
+            </div>
+        </div>
+
+        <!-- Playback Group -->
+        <div class="step-row" style="background: #18181c; border-color: #4b5563; margin-bottom:0;">
+            <div class="step-title">
+                <span style="color: #fff;">Playback Controls</span>
+            </div>
+            <div class="step-controls">
+                <div class="form-group" style="max-width: 130px;">
+                    <label>Sweep Duration</label>
+                    <select id="sweepDuration">
+                        <option value="3">3 Seconds</option>
+                        <option value="5" selected>5 Seconds</option>
+                        <option value="10">10 Seconds</option>
+                    </select>
+                </div>
+                <button class="btn btn-secondary" id="btnPlaySweep">Play Sweep Tone</button>
+            </div>
+            <div class="step-controls" style="margin-top: 10px;">
+                <div class="form-group" style="max-width: 110px;">
+                    <label>Sweep Start</label>
+                    <select id="sweepStart">
+                        <option value="20" selected>20 Hz</option>
+                        <option value="50">50 Hz</option>
+                        <option value="100">100 Hz</option>
+                        <option value="200">200 Hz</option>
+                    </select>
+                </div>
+                <div class="form-group" style="max-width: 110px;">
+                    <label>Sweep End</label>
+                    <select id="sweepRange">
+                        <option value="20000" selected>20 kHz</option>
+                        <option value="16000">16 kHz</option>
+                        <option value="10000">10 kHz</option>
+                        <option value="5000">5 kHz</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ESP32 RAW MEASUREMENT -->
+    <div class="step-row">
+        <div class="step-title">
+            <span>ESP32 Hardware Speaker Profile (Source)</span>
+            <span id="sourceBadge" class="badge">No Data</span>
+        </div>
+        <div class="step-controls">
+            <button class="btn btn-success" id="btnSaveSource" disabled>Use recorded profile</button>
+            <button class="btn btn-secondary" id="btnExportSourceJson" disabled>Export JSON</button>
+            <button class="btn btn-secondary" id="btnImportSourceJson">Import JSON</button>
+            <button class="btn btn-danger" id="btnClearSource">Clear</button>
+            <input type="file" id="sourceFileInput" accept=".json" style="display:none;">
+        </div>
+    </div>
+
+    <!-- TARGET PROFILE SELECTION & MEASUREMENT -->
+    <div class="step-row">
+        <div class="step-title">
+            <span>Target Profile Selection</span>
+            <span id="targetBadge" class="badge">Preset Target Profile</span>
+        </div>
+        <div class="step-controls">
+            <div class="form-group">
+                <select id="targetProfileSelect">
+                    <option value="harman">Harman Room Target Profile</option>
+                    <option value="bbc">BBC Dip Target Profile</option>
+                    <option value="flat">Flat Response Target Profile</option>
+                    <option value="custom">Recorded Target Speaker Profile</option>
+                </select>
+            </div>
+            <button class="btn btn-success" id="btnSaveTarget" style="display:none;" disabled>Use recorded profile</button>
+            <button class="btn btn-secondary" id="btnExportTargetJson" style="display:none;" disabled>Export JSON</button>
+            <button class="btn btn-secondary" id="btnImportTargetJson" style="display:none;">Import JSON</button>
+            <button class="btn btn-danger" id="btnClearTarget" style="display:none;">Clear</button>
+            <input type="file" id="targetFileInput" accept=".json" style="display:none;">
+        </div>
+    </div>
+
+    <!-- CALCULATION & REW FILE EXPORT -->
+    <div class="step-row">
+        <div class="step-title">
+            <span>Smoothing & REW Correction Export</span>
+        </div>
+        <div class="step-controls">
+            <div class="form-group" style="max-width: 220px;">
+                <label>Octave Smoothing</label>
+                <select id="smoothingSelect">
+                    <option value="0">Off (Raw Measurements)</option>
+                    <option value="3" selected>1/3 Octave (Recommended)</option>
+                    <option value="6">1/6 Octave (Medium)</option>
+                    <option value="12">1/12 Octave (Light)</option>
+                </select>
+            </div>
+            <button class="btn btn-success" id="btnExportREW" disabled style="padding: 0 20px;">
+                Export REW File (.txt)
+            </button>
+        </div>
+    </div>
+
+    <div class="status" id="statusMessage">Status: Ready. Start the microphone to measure or click "Play Sweep Tone" to test audio levels.</div>
+
+    <div class="canvas-container">
+        <canvas id="responseChart"></canvas>
+        <div class="legend" id="chartLegend">
+            <div class="legend-item" id="legendTarget">
+                <span class="legend-swatch" style="border-top-color:#3b82f6;"></span>
+                <span id="legendTargetLabel">Target</span>
+            </div>
+            <div class="legend-item" id="legendSource">
+                <span class="legend-swatch" style="border-top-color:#ef4444;"></span>
+                <span>ESP32 speaker profile (source)</span>
+            </div>
+            <div class="legend-item" id="legendLive">
+                <span class="legend-swatch" style="border-top-color:#10b981; border-top-width:2px;"></span>
+                <span>Microphone recording (peak hold)</span>
+            </div>
+        </div>
+    </div>
+
+    <details class="event-log" open>
+        <summary>Event log</summary>
+        <div class="step-controls" style="margin: 8px 0;">
+            <button class="btn btn-secondary" id="btnCopyLog">Copy log</button>
+            <button class="btn btn-secondary" id="btnClearLog">Clear log</button>
+        </div>
+        <pre id="eventLog"></pre>
+    </details>
+</div>
+
+<script>
+    const FREQUENCIES = Array.from({length: 120}, (_, i) => {
+        return Math.round(20 * Math.pow(20000 / 20, i / 119));
+    });
+
+    let sourceProfile = null;
+    let customTargetProfile = null;
+    let audioCtx = null;
+    let analyser = null;
+    let micStream = null;
+    let isListening = false;
+    let micSource = null;   // kept in a global so the browser can't garbage-collect it mid-measurement
+    let silentSink = null;
+    let liveRaf = 0;
+    let hasRecording = false;   // true once a recording has started; stays true after the mic stops
+    let sweepSeq = 0;
+
+    // ---- Event log (shown on the page, mirrored to the console, survives a page reload) ----
+    const logLines = [];
+    function logEvent(msg) {
+        const d = new Date();
+        const pad = (n, w = 2) => String(n).padStart(w, '0');
+        const stamp = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + '.' + pad(d.getMilliseconds(), 3);
+        const line = '[' + stamp + '] ' + msg;
+        logLines.push(line);
+        if (logLines.length > 800) logLines.shift();
+        console.log(line);
+        try { sessionStorage.setItem('dsp_event_log', JSON.stringify(logLines)); } catch (e) {}
+        const el = document.getElementById('eventLog');
+        if (el) {
+            el.textContent = logLines.join('\n');
+            el.scrollTop = el.scrollHeight;
+        }
+    }
+    try {
+        const saved = sessionStorage.getItem('dsp_event_log');
+        if (saved) JSON.parse(saved).forEach(l => logLines.push(l));
+    } catch (e) {}
+    logEvent('--- Script loaded (navigation type: ' +
+        (((performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {}).type || 'unknown') + ') ---');
+
+    let activeSpectrum = new Array(FREQUENCIES.length).fill(-100);
+
+    const canvas = document.getElementById('responseChart');
+    const ctx = canvas.getContext('2d');
+    const statusMsg = document.getElementById('statusMessage');
+
+    const targetSelect = document.getElementById('targetProfileSelect');
+    const smoothingSelect = document.getElementById('smoothingSelect');
+    const sweepDuration = document.getElementById('sweepDuration');
+    const sweepRange = document.getElementById('sweepRange');
+    const sweepStart = document.getElementById('sweepStart');
+
+    const btnToggleMic = document.getElementById('btnToggleMic');
+    const btnPlaySweep = document.getElementById('btnPlaySweep');
+    const btnResetPeaks = document.getElementById('btnResetPeaks');
+
+    const btnSaveSource = document.getElementById('btnSaveSource');
+    const btnExportSourceJson = document.getElementById('btnExportSourceJson');
+    const btnImportSourceJson = document.getElementById('btnImportSourceJson');
+    const btnClearSource = document.getElementById('btnClearSource');
+    const sourceFileInput = document.getElementById('sourceFileInput');
+
+    const btnSaveTarget = document.getElementById('btnSaveTarget');
+    const btnExportTargetJson = document.getElementById('btnExportTargetJson');
+    const btnImportTargetJson = document.getElementById('btnImportTargetJson');
+    const btnClearTarget = document.getElementById('btnClearTarget');
+    const targetFileInput = document.getElementById('targetFileInput');
+
+    const btnExportREW = document.getElementById('btnExportREW');
+
+    window.addEventListener('load', () => {
+        const savedSource = localStorage.getItem('esp32_source_profile');
+        if (savedSource) {
+            try {
+                sourceProfile = JSON.parse(savedSource);
+            } catch (e) {}
+        }
+        const savedTarget = localStorage.getItem('esp32_target_profile');
+        if (savedTarget) {
+            try {
+                customTargetProfile = JSON.parse(savedTarget);
+            } catch (e) {}
+        }
+        updateBadges();
+        resizeCanvas();
+    });
+
+    targetSelect.addEventListener('change', (e) => {
+        const isCustom = e.target.value === 'custom';
+        const customElements = [btnSaveTarget, btnExportTargetJson, btnImportTargetJson, btnClearTarget];
+        customElements.forEach(el => el.style.display = isCustom ? 'inline-flex' : 'none');
+        updateBadges();
+        drawChart();
+    });
+
+    smoothingSelect.addEventListener('change', () => drawChart());
+
+    function resizeCanvas() {
+        canvas.width = canvas.parentElement.clientWidth * window.devicePixelRatio;
+        canvas.height = 320 * window.devicePixelRatio;
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        drawChart();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function updateBadges() {
+        const srcBadge = document.getElementById('sourceBadge');
+        if (sourceProfile) {
+            srcBadge.innerText = "Profile Loaded";
+            srcBadge.classList.add('badge-active');
+            btnExportSourceJson.disabled = false;
+            btnExportREW.disabled = false;
+        } else {
+            srcBadge.innerText = "No Data";
+            srcBadge.classList.remove('badge-active');
+            btnExportSourceJson.disabled = true;
+            btnExportREW.disabled = true;
+        }
+
+        const tgtBadge = document.getElementById('targetBadge');
+        if (targetSelect.value === 'custom') {
+            if (customTargetProfile) {
+                tgtBadge.innerText = "Custom Speaker Profile";
+                tgtBadge.classList.add('badge-active');
+                btnExportTargetJson.disabled = false;
+            } else {
+                tgtBadge.innerText = "Custom Selected (No Recording)";
+                tgtBadge.classList.remove('badge-active');
+                btnExportTargetJson.disabled = true;
+            }
+        } else {
+            tgtBadge.innerText = "Preset Target Profile";
+            tgtBadge.classList.remove('badge-active');
+        }
+        updateLegend();
+    }
+
+    function updateLegend() {
+        const sel = targetSelect.options[targetSelect.selectedIndex];
+        document.getElementById('legendTargetLabel').innerText = 'Target: ' + sel.text;
+        document.getElementById('legendTarget').classList.toggle('inactive', targetSelect.value === 'custom' && !customTargetProfile);
+        document.getElementById('legendSource').classList.toggle('inactive', !sourceProfile);
+        document.getElementById('legendLive').classList.toggle('inactive', !hasRecording);
+    }
+
+    function applyOctaveSmoothing(profile, octaveFraction) {
+        if (!profile || octaveFraction === 0) return profile;
+
+        const fraction = 1 / octaveFraction;
+        return profile.map((pt) => {
+            const centerFreq = pt.f;
+            const minFreq = centerFreq * Math.pow(2, -fraction / 2);
+            const maxFreq = centerFreq * Math.pow(2, fraction / 2);
+
+            const windowPts = profile.filter(p => p.f >= minFreq && p.f <= maxFreq);
+            if (windowPts.length === 0) return pt;
+
+            const avgDb = windowPts.reduce((sum, p) => sum + p.v, 0) / windowPts.length;
+            return { f: centerFreq, v: avgDb };
+        });
+    }
+
+    // Creates the shared AudioContext (call from a user gesture) and tries to get it running.
+    // Never hangs: on iOS resume() can stay pending while the context is interrupted.
+    function ensureAudioContext(timeoutMs = 1000) {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            logEvent('AudioContext created: state=' + audioCtx.state + ', sampleRate=' + audioCtx.sampleRate);
+            audioCtx.onstatechange = () => {
+                logEvent('AudioContext state -> ' + audioCtx.state);
+                if (sweepPlaying && audioCtx.state !== 'running') {
+                    statusMsg.innerText = "Status: Browser paused audio (" + audioCtx.state + ").";
+                }
+            };
+        }
+        const ready = audioCtx.state === 'running' ? Promise.resolve() : audioCtx.resume().catch(() => {});
+        return Promise.race([ready, new Promise(resolve => setTimeout(resolve, timeoutMs))]);
+    }
+
+    async function toggleMicrophone() {
+        if (isListening) {
+            stopMicrophone();
+            return;
+        }
+
+        try {
+            btnToggleMic.disabled = true;   // ignore double-taps while the permission prompt is open
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error("Microphone access needs a secure (https) page in a supported browser.");
+            }
+            // Create/unlock the audio context inside the click, without waiting on it
+            ensureAudioContext();
+
+            micStream = await navigator.mediaDevices.getUserMedia({
+                audio: { 
+                    echoCancellation: false, 
+                    noiseSuppression: false, 
+                    autoGainControl: false 
+                }
+            });
+
+            // Opening the mic can make mobile browsers reroute audio and suspend the context.
+            // The wait is time-limited because resume() can stay pending on iOS.
+            await ensureAudioContext();
+
+            micSource = audioCtx.createMediaStreamSource(micStream);
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 16384;
+            analyser.smoothingTimeConstant = 0.0;
+            micSource.connect(analyser);
+            // Silent path to the output keeps the analyser pulling audio in browsers that need it
+            silentSink = audioCtx.createGain();
+            silentSink.gain.value = 0;
+            analyser.connect(silentSink);
+            silentSink.connect(audioCtx.destination);
+
+            isListening = true;
+            activeSpectrum.fill(-100);   // a new recording replaces the previous one
+            hasRecording = true;
+            logEvent('Microphone started - previous recording cleared (sampleRate=' + audioCtx.sampleRate + ')');
+
+            btnToggleMic.innerText = "Stop Microphone";
+            btnToggleMic.classList.add('btn-danger');
+            btnResetPeaks.disabled = false;
+            btnSaveSource.disabled = false;
+            btnSaveTarget.disabled = false;
+
+            document.getElementById('micStatusBadge').innerText = "Mic Active";
+            document.getElementById('micStatusBadge').classList.add('badge-active');
+            statusMsg.innerText = "Status: Microphone listening. Play a sweep tone or stream over AirPlay.";
+
+            updateLegend();
+            cancelAnimationFrame(liveRaf);
+            processLiveAudio();
+        } catch (e) {
+            if (micStream) {
+                micStream.getTracks().forEach(t => t.stop());
+                micStream = null;
+            }
+            statusMsg.innerText = "Microphone Access Error: " + (e.name ? e.name + " - " : "") + e.message;
+        } finally {
+            btnToggleMic.disabled = false;
+        }
+    }
+
+    function stopMicrophone() {
+        isListening = false;
+        if (micStream) {
+            micStream.getTracks().forEach(t => t.stop());
+            micStream = null;
+        }
+        
+        if (micSource) { try { micSource.disconnect(); } catch (e) {} micSource = null; }
+        if (silentSink) { try { silentSink.disconnect(); } catch (e) {} silentSink = null; }
+        if (analyser) { try { analyser.disconnect(); } catch (e) {} analyser = null; }
+
+        btnToggleMic.innerText = "Start Microphone";
+        btnToggleMic.classList.remove('btn-danger');
+        // 'Reset Live Peaks' stays enabled: the recording is kept until it is reset or a new one starts
+
+        document.getElementById('micStatusBadge').innerText = "Mic Offline";
+        document.getElementById('micStatusBadge').classList.remove('badge-active');
+        statusMsg.innerText = "Status: Microphone stopped. Recording kept - click 'Use recorded profile' to save it.";
+        logEvent('Microphone stopped - recording kept');
+        updateLegend();
+        drawChart();
+    }
+
+    function processLiveAudio() {
+        if (!isListening || !analyser) return;
+
+        const freqData = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(freqData);
+
+        FREQUENCIES.forEach((targetFreq, i) => {
+            const binIndex = Math.round((targetFreq / (audioCtx.sampleRate / 2)) * analyser.frequencyBinCount);
+            const level = freqData[binIndex];
+            if (level && level > activeSpectrum[i]) {
+                activeSpectrum[i] = level;
+            }
+        });
+
+        drawChart();
+        liveRaf = requestAnimationFrame(processLiveAudio);
+    }
+
+    let sweepPlaying = false;
+
+    // Pre-render the logarithmic sweep into an AudioBuffer. Playing a finished buffer does not
+    // depend on AudioParam automation timing (which can be re-timed right after the context
+    // starts), so the sweep plays once, straight through.
+    function buildSweepBuffer(duration, startFreq, topFreq) {
+        const sr = audioCtx.sampleRate;
+        const f0 = startFreq;
+        const f1 = Math.min(topFreq, sr * 0.45);
+        const n = Math.floor(duration * sr);
+        const buffer = audioCtx.createBuffer(1, n, sr);
+        const data = buffer.getChannelData(0);
+        const k = Math.log(f1 / f0);
+        const fade = Math.floor(0.08 * sr);
+        const peak = 0.5;
+
+        for (let i = 0; i < n; i++) {
+            const t = i / sr;
+            // phase = 2*pi * integral of f0 * exp(k*t/T) dt
+            const phase = 2 * Math.PI * f0 * duration / k * (Math.exp(t * k / duration) - 1);
+            let amp = peak;
+            if (i < fade) amp *= i / fade;
+            else if (i > n - fade) amp *= (n - i) / fade;
+            data[i] = amp * Math.sin(phase);
+        }
+        return buffer;
+    }
+
+    // While a sweep plays, log every 0.1 s: the frequency being generated, the loudest frequency the
+    // mic hears (if the mic is on), how far the audio clock has drifted from the wall clock (a growing
+    // negative drift means the audio thread stalled) and any main-thread stall. Runs with the mic off too.
+    function startSweepTracker(sweepId, duration, startFreq, topFreq) {
+        const micOn = isListening && micSource;
+        logEvent('Sweep #' + sweepId + ' range ' + Math.round(startFreq) + ' Hz - ' + Math.round(topFreq) + ' Hz' +
+            (micOn ? ' (tracking generated vs heard frequency)' : ' (mic off: tracking audio clock only)'));
+
+        const src = micSource;
+        let tracker = null;
+        let bins = null;
+        let binHz = 0;
+        if (micOn) {
+            tracker = audioCtx.createAnalyser();
+            tracker.fftSize = 4096;            // short window (~85 ms) so the heard frequency isn't smeared
+            tracker.smoothingTimeConstant = 0;
+            src.connect(tracker);
+            bins = new Float32Array(tracker.frequencyBinCount);
+            binHz = audioCtx.sampleRate / tracker.fftSize;
+        }
+
+        const t0 = performance.now();
+        const c0 = audioCtx.currentTime;
+        const k = Math.log(topFreq / startFreq);
+        let nextLog = 0;
+        let lastTick = t0;
+        let maxGap = 0;
+
+        const tick = () => {
+            const now = performance.now();
+            const t = (now - t0) / 1000;
+            maxGap = Math.max(maxGap, now - lastTick);
+            lastTick = now;
+
+            // keep going 0.8 s past the end so the tail of the sweep and the mic's delay are covered
+            if (t > duration + 0.8) {
+                if (tracker) { try { src.disconnect(tracker); } catch (e) {} }
+                return;
+            }
+            if (t >= nextLog) {
+                const expected = startFreq * Math.exp(k * Math.min(t, duration) / duration);
+                let line = 'Sweep #' + sweepId + ' t=' + t.toFixed(2) + 's generated~' +
+                    (t <= duration ? Math.round(expected) + ' Hz' : 'ended');
+                if (tracker) {
+                    tracker.getFloatFrequencyData(bins);
+                    let peakIdx = 3;
+                    for (let i = 4; i < bins.length; i++) {
+                        if (bins[i] > bins[peakIdx]) peakIdx = i;
+                    }
+                    line += ', heard~' + Math.round(peakIdx * binHz) + ' Hz (' + bins[peakIdx].toFixed(0) + ' dB)';
+                }
+                line += ', clock drift ' + (((audioCtx.currentTime - c0) - t) * 1000).toFixed(0) + ' ms';
+                if (maxGap > 120) line += ', MAIN-THREAD STALL ' + Math.round(maxGap) + ' ms';
+                maxGap = 0;
+                logEvent(line);
+                nextLog += 0.1;
+            }
+            requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+    }
+
+    async function playIndependentSweep() {
+        // Ignore taps while a sweep is running or starting
+        if (sweepPlaying) {
+            logEvent('Sweep request IGNORED: a sweep is already starting/playing');
+            return;
+        }
+        sweepPlaying = true;
+        const sweepId = ++sweepSeq;
+        logEvent('Sweep #' + sweepId + ' requested (audio state=' + (audioCtx ? audioCtx.state : 'no context yet') +
+            ', mic=' + (isListening ? 'on' : 'off') + ')');
+        btnPlaySweep.disabled = true;
+
+        let finished = false;
+        const finish = (message) => {
+            if (finished) return;
+            finished = true;
+            logEvent('Sweep #' + sweepId + ' finished: ' + message);
+            sweepPlaying = false;
+            btnPlaySweep.disabled = false;
+            statusMsg.innerText = message;
+        };
+
+        try {
+            // Created and resumed synchronously inside the click; the wait is time-limited
+            await ensureAudioContext();
+            logEvent('Sweep #' + sweepId + ' audio ready: state=' + audioCtx.state);
+            if (audioCtx.state !== 'running') {
+                throw new Error("audio is " + audioCtx.state + ". Tap Play again and check the device isn't muted.");
+            }
+
+            if (isListening) {
+                activeSpectrum.fill(-100);
+            }
+
+            const duration = parseFloat(sweepDuration.value);
+            const startFreq = parseFloat(sweepStart.value);
+            const topFreq = Math.min(parseFloat(sweepRange.value), audioCtx.sampleRate * 0.45);
+            const source = audioCtx.createBufferSource();
+            source.buffer = buildSweepBuffer(duration, startFreq, topFreq);
+            source.connect(audioCtx.destination);
+
+            const doneMessage = () => isListening
+                ? "Status: Sweep complete. Click 'Use recorded profile' to lock in profile."
+                : "Status: Sweep playback finished.";
+
+            source.onended = () => {
+                logEvent('Sweep #' + sweepId + ' ended event fired');
+                try {
+                    const p = audioCtx.playoutStats;
+                    if (p) {
+                        logEvent('Playout stats: ' + JSON.stringify({
+                            underrunEvents: p.fallbackFramesEvents,
+                            underrunSeconds: p.fallbackFramesDuration,
+                            totalSeconds: p.totalFramesDuration,
+                            avgLatency: p.averageLatency
+                        }));
+                    }
+                } catch (e) {}
+                source.disconnect();
+                finish(doneMessage());
+            };
+            // Safety net so the button can never stay locked if the browser drops the ended event
+            setTimeout(() => finish(doneMessage()), (duration + 1.5) * 1000);
+
+            source.start();
+            logEvent('Sweep #' + sweepId + ' STARTED playing: duration=' + duration + 's, sampleRate=' + audioCtx.sampleRate +
+                ', currentTime=' + audioCtx.currentTime.toFixed(3) + ', baseLatency=' + audioCtx.baseLatency +
+                ', outputLatency=' + audioCtx.outputLatency);
+            startSweepTracker(sweepId, duration, startFreq, topFreq);
+            statusMsg.innerText = "Status: Playing smooth logarithmic sweep tone...";
+        } catch (e) {
+            finish("Audio Error: " + e.message);
+        }
+    }
+
+    function saveActiveSpectrum(type) {
+        if (!hasRecording) {
+            statusMsg.innerText = "Status: Nothing recorded yet. Start the microphone first.";
+            return;
+        }
+        const midIndices = FREQUENCIES.map((f, i) => (f >= 500 && f <= 2000) ? i : -1).filter(i => i !== -1);
+        const midAvg = midIndices.reduce((acc, idx) => acc + activeSpectrum[idx], 0) / (midIndices.length || 1);
+
+        const normalized = FREQUENCIES.map((f, i) => ({
+            f: f,
+            v: Math.max(-24, Math.min(24, activeSpectrum[i] - midAvg))
+        }));
+
+        if (type === 'source') {
+            sourceProfile = normalized;
+            localStorage.setItem('esp32_source_profile', JSON.stringify(sourceProfile));
+            statusMsg.innerText = "Status: ESP32 Source Profile saved successfully.";
+        } else {
+            customTargetProfile = normalized;
+            localStorage.setItem('esp32_target_profile', JSON.stringify(customTargetProfile));
+            statusMsg.innerText = "Status: Custom Target Profile saved successfully.";
+        }
+        updateBadges();
+        drawChart();
+    }
+
+    function getPresetTargetCurve(profileType) {
+        return FREQUENCIES.map(f => {
+            let val = 0;
+            if (profileType === 'harman') {
+                if (f < 100) val = 4.0;
+                else if (f < 200) val = 4.0 * (1 - (f - 100) / 100);
+                else if (f > 1000) val = -3.0 * (Math.log10(f / 1000) / Math.log10(20));
+            } else if (profileType === 'bbc') {
+                if (f >= 1000 && f <= 4000) {
+                    val = -2.5 * Math.sin(Math.PI * (Math.log10(f / 1000) / Math.log10(4)));
+                }
+            }
+            return { f, v: val };
+        });
+    }
+
+    function drawChart() {
+        const w = canvas.width / window.devicePixelRatio;
+        const h = 320;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.strokeStyle = '#2e2e38';
+        ctx.lineWidth = 1;
+        ctx.fillStyle = '#6b7280';
+        ctx.font = '10px sans-serif';
+
+        const gridFreqs = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+        gridFreqs.forEach(f => {
+            const x = getX(f, w);
+            ctx.beginPath();
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, h - 20);
+            ctx.stroke();
+            ctx.fillText(f >= 1000 ? (f / 1000) + 'k' : f, x - 6, h - 5);
+        });
+
+        for (let db = -18; db <= 18; db += 6) {
+            const y = getY(db, h);
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(w, y);
+            ctx.stroke();
+            ctx.fillText((db > 0 ? '+' : '') + db + ' dB', 5, y - 2);
+        }
+
+        const smoothingValue = parseInt(smoothingSelect.value);
+
+        // Target Profile (Blue)
+        const activePreset = targetSelect.value;
+        let targetCurve = activePreset === 'custom' ? customTargetProfile : getPresetTargetCurve(activePreset);
+        if (targetCurve) {
+            const smoothedTarget = applyOctaveSmoothing(targetCurve, smoothingValue);
+            drawCurve(smoothedTarget, '#3b82f6', 2);
+        }
+
+        // ESP32 Source Profile (Red)
+        if (sourceProfile) {
+            const smoothedSource = applyOctaveSmoothing(sourceProfile, smoothingValue);
+            drawCurve(smoothedSource, '#ef4444', 2);
+        }
+
+        // Microphone recording (Green) - kept on screen after the mic stops
+        if (hasRecording) {
+            const liveData = FREQUENCIES.map((f, i) => ({ f, v: activeSpectrum[i] + 50 }));
+            const smoothedLive = applyOctaveSmoothing(liveData, smoothingValue);
+            drawCurve(smoothedLive, '#10b981', 1);
+        }
+    }
+
+    function getX(freq, width) {
+        return ((Math.log10(freq) - Math.log10(20)) / (Math.log10(20000) - Math.log10(20))) * width;
+    }
+
+    function getY(db, height) {
+        const h = height - 20;
+        return (h / 2) - (db * (h / 36));
+    }
+
+    function drawCurve(data, color, width) {
+        const w = canvas.width / window.devicePixelRatio;
+        const h = 320;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+
+        data.forEach((pt, i) => {
+            const x = getX(pt.f, w);
+            const y = getY(pt.v, h);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+    }
+
+    function downloadJson(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    btnExportSourceJson.addEventListener('click', () => downloadJson(sourceProfile, 'esp32_source_profile.json'));
+    btnExportTargetJson.addEventListener('click', () => downloadJson(customTargetProfile, 'target_speaker_profile.json'));
+
+    btnImportSourceJson.addEventListener('click', () => sourceFileInput.click());
+    btnImportTargetJson.addEventListener('click', () => targetFileInput.click());
+
+    sourceFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                sourceProfile = JSON.parse(event.target.result);
+                localStorage.setItem('esp32_source_profile', JSON.stringify(sourceProfile));
+                updateBadges();
+                drawChart();
+                statusMsg.innerText = "Status: ESP32 Source JSON imported successfully.";
+            } catch (err) { alert("Invalid JSON file."); }
+        };
+        reader.readAsText(file);
+    });
+
+    targetFileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                customTargetProfile = JSON.parse(event.target.result);
+                localStorage.setItem('esp32_target_profile', JSON.stringify(customTargetProfile));
+                updateBadges();
+                drawChart();
+                statusMsg.innerText = "Status: Target Speaker JSON imported successfully.";
+            } catch (err) { alert("Invalid JSON file."); }
+        };
+        reader.readAsText(file);
+    });
+
+    btnToggleMic.addEventListener('click', toggleMicrophone);
+    btnPlaySweep.addEventListener('click', (e) => {
+        logEvent('Play button click event (isTrusted=' + e.isTrusted + ', detail=' + e.detail + ', timeStamp=' + Math.round(e.timeStamp) + ')');
+        playIndependentSweep();
+    });
+    btnResetPeaks.addEventListener('click', () => {
+        activeSpectrum.fill(-100);
+        if (!isListening) {
+            hasRecording = false;
+            btnResetPeaks.disabled = true;
+        }
+        logEvent('Recorded peaks cleared');
+        updateLegend();
+        drawChart();
+        statusMsg.innerText = "Status: Live peaks cleared.";
+    });
+
+    btnSaveSource.addEventListener('click', () => saveActiveSpectrum('source'));
+    btnSaveTarget.addEventListener('click', () => saveActiveSpectrum('target'));
+
+    btnClearSource.addEventListener('click', () => {
+        sourceProfile = null;
+        localStorage.removeItem('esp32_source_profile');
+        updateBadges();
+        drawChart();
+        statusMsg.innerText = "Status: ESP32 Source profile cleared.";
+    });
+
+    btnClearTarget.addEventListener('click', () => {
+        customTargetProfile = null;
+        localStorage.removeItem('esp32_target_profile');
+        updateBadges();
+        drawChart();
+        statusMsg.innerText = "Status: Target profile cleared.";
+    });
+
+    btnExportREW.addEventListener('click', () => {
+        if (!sourceProfile) return;
+
+        const activePreset = targetSelect.value;
+        const targetCurve = activePreset === 'custom' ? customTargetProfile : getPresetTargetCurve(activePreset);
+
+        if (!targetCurve) {
+            alert("Please select or record a target profile.");
+            return;
+        }
+
+        if (sourceProfile.length !== FREQUENCIES.length || targetCurve.length !== FREQUENCIES.length) {
+            alert("Profile size doesn't match the expected " + FREQUENCIES.length + " points. Re-record or re-import the profile.");
+            return;
+        }
+
+        const smoothingValue = parseInt(smoothingSelect.value);
+        const smoothedSource = applyOctaveSmoothing(sourceProfile, smoothingValue);
+        const smoothedTarget = applyOctaveSmoothing(targetCurve, smoothingValue);
+
+        let exportLines = [
+            "* Frequency Response Data Export for Louder-ESP32 / AirPlay-ESP32",
+            `* Octave Smoothing applied: ${smoothingValue > 0 ? '1/' + smoothingValue : 'None'}`,
+            "* Freq(Hz) dB Phase(deg)"
+        ];
+
+        FREQUENCIES.forEach((f, i) => {
+            const targetDb = smoothedTarget[i].v;
+            const sourceDb = smoothedSource[i].v;
+            const deltaDb = (targetDb - sourceDb).toFixed(2);
+            exportLines.push(`${f.toFixed(2)} ${deltaDb} 0.0`);
+        });
+
+        const blob = new Blob([exportLines.join('\r\n')], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `esp32_correction_${activePreset}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        statusMsg.innerText = "Status: REW file exported successfully. Upload this text file to your firmware Web UI.";
+    });
+
+    // ---- Diagnostics: page lifecycle + log buttons ----
+    document.addEventListener('visibilitychange', () => logEvent('Page visibility: ' + document.visibilityState));
+    window.addEventListener('pagehide', () => logEvent('pagehide event'));
+    window.addEventListener('pageshow', (e) => logEvent('pageshow event (persisted=' + e.persisted + ')'));
+
+    document.getElementById('btnClearLog').addEventListener('click', () => {
+        logLines.length = 0;
+        try { sessionStorage.removeItem('dsp_event_log'); } catch (e) {}
+        document.getElementById('eventLog').textContent = '';
+    });
+    document.getElementById('btnCopyLog').addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(logLines.join('\n'));
+            statusMsg.innerText = "Status: Log copied to clipboard.";
+        } catch (e) {
+            statusMsg.innerText = "Status: Could not copy automatically - select the log text and copy it manually.";
+        }
+    });
+</script>
+</body>
+</html>
