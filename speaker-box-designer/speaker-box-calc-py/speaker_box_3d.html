@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive 3D Speaker Blueprint</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #121212; overflow: hidden; font-family: system-ui, sans-serif; }
+        #info-panel { position: absolute; top: 15px; left: 15px; background: rgba(0,0,0,0.85); padding: 15px; border-radius: 8px; border: 1px solid #333; color: #fff; max-width: 320px; z-index: 10; }
+        h3 { margin: 0 0 10px 0; color: #00adb5; font-size: 14px; text-transform: uppercase; }
+        p { margin: 4px 0; font-size: 12px; color: #ccc; }
+        .control-group { margin-top: 10px; border-top: 1px solid #444; padding-top: 8px; }
+        label { font-size: 12px; color: #fff; display: block; margin-bottom: 4px; cursor: pointer; }
+        input[type=range] { width: 100%; cursor: pointer; }
+        #controls-hint { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 8px 15px; border-radius: 20px; font-size: 12px; color: #fff; border: 1px solid #555; pointer-events: none; z-index: 10; }
+
+        .panel-label {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.75);
+            color: #00fff2;
+            padding: 3px 8px;
+            border-radius: 4px;
+            border: 1px solid #00fff2;
+            font-size: 11px;
+            font-weight: bold;
+            pointer-events: none;
+            white-space: nowrap;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.1s ease;
+        }
+
+        #report-overlay {
+            display: block;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 480px;
+            max-height: 85vh;
+            background: rgba(10, 15, 25, 0.92);
+            border: 1px solid #00adb5;
+            border-radius: 8px;
+            padding: 15px;
+            color: #00fff2;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 12px;
+            white-space: pre;
+            overflow-y: auto;
+            z-index: 20;
+            box-shadow: 0px 4px 20px rgba(0, 0, 0, 0.8);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="info-panel">
+        <h3>Blueprint Configuration</h3>
+        <p>Base Width: 10.750"</p>
+        <p>Main Box: 5.500" W x 5.500" H x 5.000" D</p>
+        <p>MDF Thickness: 0.625"</p>
+        <p>Raw Enclosure: 1.552 L</p>
+
+        <div class="control-group">
+            <label for="opacity-slider">Panel Transparency: <span id="opacity-val">80%</span></label>
+            <input type="range" id="opacity-slider" min="0.1" max="1.0" step="0.05" value="0.8">
+        </div>
+        <div class="control-group">
+            <label><input type="checkbox" id="toggle-labels" checked> Show Panel Text Labels</label>
+            <label><input type="checkbox" id="toggle-cutlist" checked> Show Full Cut List Report</label>
+        </div>
+    </div>
+    
+    <div id="controls-hint">🖱️ Left Click + Drag to Rotate | Right Click + Drag to Pan | Scroll to Zoom</div>
+    <div id="label-container"></div>
+    <div id="report-overlay">=====================================================
+📐 BOX DESIGN PROFILE: MODULAR L-SHAPED MODE (100% TUNED EXTENSION)
+🧱 Material Thickness: 0.625" (Inches Input)
+🔊 Speaker Hole Cutout: 3.000" Diameter
+=====================================================
+📦 BASE GEOMETRIC SPECIFICATIONS:
+  Main Core Airspace:  67.734 cu in
+  Pocket Airspace:     26.961 cu in
+  Total Surface Area:  120.531 sq in
+-----------------------------------------------------
+🔊 ACOUSTIC AIRSPACE CAPACITIES MATRIX:
+  Plain Raw Enclosure:        👉 1.552 Liters
+  + Polyfill Fluff Only:      👉 1.769 Liters (+14% apparent space)
+  + Routed Pockets Only:      👉 1.799 Liters (0.250" deep @ 50% area)
+  + COMBINED BOTH METHODS:    👉 2.050 Liters (Maximum Efficiency)
+=====================================================
+
+-------------------------------------------------------------------------
+🪚 REQUIRED MDF CUT LIST (Width x Height in ")
+-------------------------------------------------------------------------
+  [ ] Qty: 1  |  10.750"  x   5.000"  --> Base Board
+  [ ] Qty: 1  |   5.500"  x   5.000"  --> Main Top Cap (Lid)
+  [ ] Qty: 1  |   9.125"  x   4.250"  --> Rear Panel
+  [ ] Qty: 1  |   4.250"  x   4.250"  --> Main Front Baffle (Includes 3.000" Center Cutout)
+  [ ] Qty: 1  |   5.000"  x   4.250"  --> Right Side Panel
+  [ ] Qty: 1  |   4.250"  x   3.000"  --> Extension Top Cap
+  [ ] Qty: 1  |   4.250"  x   4.250"  --> Extension Front Baffle
+  [ ] Qty: 1  |   1.750"  x   4.250"  --> Extension Left Side
+  [ ] Qty: 1  |   2.625"  x   4.250"  --> Main Left Side Panel
+================================================-------------------------</div>
+
+    <script>
+        const scene = new THREE.Scene(); scene.background = new THREE.Color(0x121212);
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        const controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+        const light = new THREE.DirectionalLight(0xffffff, 0.8); light.position.set(20, 40, 20); light.castShadow = true; scene.add(light);
+        scene.add(new THREE.GridHelper(30, 30, 0x444444, 0x222222));
+
+        const panelMaterials = [];
+        const labelElements = [];
+        const useMetric = false;
+        const unitSuffix = "\"";
+        const cutoutRadius = 1.5000;
+
+        function createBaffleGeometry(w, h, d, holeRadius) {
+            const shape = new THREE.Shape();
+            const hw = w / 2;
+            const hh = h / 2;
+
+            shape.moveTo(-hw, -hh);
+            shape.lineTo(hw, -hh);
+            shape.lineTo(hw, hh);
+            shape.lineTo(-hw, hh);
+            shape.lineTo(-hw, -hh);
+
+            const holePath = new THREE.Path();
+            holePath.absarc(0, 0, holeRadius, 0, Math.PI * 2, true);
+            shape.holes.push(holePath);
+
+            const extrudeSettings = { steps: 1, depth: d, bevelEnabled: false };
+            return new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        }
+
+        function addPanel(name, w, h, d, x, y, z, color, lblW, lblH, isBaffle) {
+            let geo = isBaffle ? createBaffleGeometry(w, h, d, cutoutRadius) : new THREE.BoxGeometry(w, h, d);
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, transparent: true, opacity: 0.8 });
+            panelMaterials.push(mat);
+
+            const mesh = new THREE.Mesh(geo, mat);
+            const centerX = x + w / 2;
+            const centerY = y + h / 2;
+            const centerZ = z + d / 2;
+
+            if (isBaffle) {
+                mesh.position.set(centerX, centerY, z);
+            } else {
+                mesh.position.set(centerX, centerY, centerZ);
+            }
+
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 1 }));
+            mesh.add(edges);
+            scene.add(mesh);
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'panel-label';
+            const formattedW = useMetric ? Math.round(lblW) : lblW.toFixed(3);
+            const formattedH = useMetric ? Math.round(lblH) : lblH.toFixed(3);
+            labelDiv.innerText = `${name} (${formattedW}${unitSuffix} x ${formattedH}${unitSuffix})`;
+            document.getElementById('label-container').appendChild(labelDiv);
+            labelElements.push({ element: labelDiv, pos: new THREE.Vector3(centerX, centerY, centerZ) });
+        }
+
+        addPanel("Base Board", 10.750, 0.625, 5.000, 0.000, 0.000, 0.000, 0x8b5a2b, 10.750, 5.000, false);
+        addPanel("Right Side Panel", 0.625, 4.250, 5.000, 9.625, 0.625, 0.000, 0x3b82f6, 5.000, 4.250, false);
+        addPanel("Main Front Baffle", 4.250, 4.250, 0.625, 5.375, 0.625, 4.375, 0x2563eb, 4.250, 4.250, true);
+        addPanel("Main Left Side Panel", 0.625, 4.250, 2.625, 4.750, 0.625, 2.375, 0x6d28d9, 2.625, 4.250, false);
+        addPanel("Main Top Cap", 5.500, 0.625, 5.000, 4.750, 4.875, 0.000, 0x1e3a8a, 5.500, 5.000, false);
+        addPanel("Rear Panel", 9.125, 4.250, 0.625, 0.500, 0.625, 0.000, 0x1d4ed8, 9.125, 4.250, false);
+        addPanel("Extension Left Side", 0.625, 4.250, 1.750, 0.500, 0.625, 0.625, 0x8b5cf6, 1.750, 4.250, false);
+        addPanel("Extension Front Baffle", 4.250, 4.250, 0.625, 0.500, 0.625, 2.375, 0x7c3aed, 4.250, 4.250, false);
+        addPanel("Extension Top Cap", 4.250, 0.625, 3.000, 0.500, 4.875, 0.000, 0x5b21b6, 4.250, 3.000, false);
+
+        document.getElementById('opacity-slider').addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            document.getElementById('opacity-val').innerText = Math.round(val * 100) + '%';
+            panelMaterials.forEach(m => m.opacity = val);
+        });
+
+        const labelsToggle = document.getElementById('toggle-labels');
+        labelsToggle.addEventListener('change', (e) => {
+            const display = e.target.checked ? 'block' : 'none';
+            labelElements.forEach(l => l.element.style.display = display);
+        });
+
+        const cutlistToggle = document.getElementById('toggle-cutlist');
+        const reportOverlay = document.getElementById('report-overlay');
+        cutlistToggle.addEventListener('change', (e) => {
+            reportOverlay.style.display = e.target.checked ? 'block' : 'none';
+        });
+
+        camera.position.set(9.900, 12.100, 14.000);
+        controls.target.set(5.375, 2.750, 2.500); 
+        controls.update();
+
+        function updateLabels() {
+            if (!labelsToggle.checked) return;
+            const tempV = new THREE.Vector3();
+            labelElements.forEach(labelObj => {
+                tempV.copy(labelObj.pos);
+                tempV.project(camera);
+
+                if (tempV.z > 1) {
+                    labelObj.element.style.opacity = 0;
+                    return;
+                }
+
+                const x = (tempV.x *  .5 + .5) * window.innerWidth;
+                const y = (tempV.y * -.5 + .5) * window.innerHeight;
+                labelObj.element.style.left = `${x}px`;
+                labelObj.element.style.top = `${y}px`;
+                labelObj.element.style.opacity = 1;
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            updateLabels();
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
