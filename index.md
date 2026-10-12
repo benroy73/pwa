@@ -9,9 +9,9 @@ In most browsers there is an option to "Install page as an app..." which gives y
 
 - A basic full screen digital clock.
 
-### [Power Outage](./power-outage/power-outage.html)
+### [SCL Power Outage](./power-outage/power-outage.html)
 
-- Check the status of a power outage at your current location.
+- Check the status of a SCL power outage at your current location.
 
 ### [HDMI Display](./hdmi-display/)
 
