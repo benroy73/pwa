@@ -24,3 +24,7 @@ In most browsers there is an option to "Install page as an app..." which gives y
 ### [DSP EQ Room Correction](./dsp-eq-room-correction/dsp-eq-room-correction.html)
 
 - Use a high quality USB microphone to calculate DSP EQ setting for a ESP32 speaker.
+
+### [Wuzhi BT Amp](./wuzhi-bt-amp/wuzhi_ble_controller.html)
+
+- Setup and control a Wuzhi JieLi Bluetooth Amplifier.

@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wuzhi Amp</title>
+<style>
+:root{--bg:#121212;--card:#1e1e1e;--card2:#252525;--accent:#00adb5;--text:#eee;--sub:#999;--line:#333}
+*{box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);margin:0;padding:16px;display:flex;justify-content:center}
+.container{width:100%;max-width:480px}
+h1{text-align:center;color:var(--accent);margin:4px 0 14px;font-size:1.5rem}
+.card{background:var(--card);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.card h2{margin:0 0 10px;font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--sub)}
+.row{display:flex;gap:10px;align-items:center}
+.flex1{flex:1}
+.status{display:flex;justify-content:space-between;align-items:center}
+.dot{width:12px;height:12px;border-radius:50%;background:#f44;display:inline-block}
+.dot.on{background:#00c851}
+button{background:var(--accent);color:#fff;border:0;padding:10px 14px;font-size:.95rem;font-weight:600;border-radius:6px;cursor:pointer}
+button.full{width:100%}
+button.ghost{background:#333}
+button.sel{outline:2px solid #fff}
+button:disabled{opacity:.4;cursor:not-allowed}
+button:active{opacity:.8}
+input[type=text],select,textarea{background:#2b2b2b;border:1px solid #444;color:#fff;border-radius:6px;padding:9px;font-size:1rem;width:100%}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.grid{display:grid;gap:8px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+.stat{background:var(--card2);border-radius:8px;padding:8px 10px;text-align:center}
+.stat b{display:block;font-size:1.2rem;color:var(--accent)}
+.stat span{font-size:.7rem;color:var(--sub);text-transform:uppercase}
+#controls.disabled{pointer-events:none;opacity:.45}
+.eq{display:flex;gap:4px;justify-content:space-between;height:150px;margin-top:10px}
+.eqband{flex:1;display:flex;flex-direction:column;align-items:center;font-size:.65rem;color:var(--sub);min-width:0}
+.eqband input{writing-mode:vertical-lr;direction:rtl;height:110px;width:100%;accent-color:var(--accent)}
+.eqband .v{color:var(--text)}
+.tag{font-size:.65rem;background:#3a2f00;color:#ffcc33;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle}
+.log{background:#000;color:#0f0;font-family:monospace;font-size:.72rem;padding:8px;border-radius:6px;height:170px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;border:1px solid #222}
+details summary{cursor:pointer;color:var(--sub);font-size:.85rem}
+.small{font-size:.75rem;color:var(--sub)}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Wuzhi Amp</h1>
+
+<div class="card">
+  <div class="status">
+    <div>Status: <strong id="status-text">Disconnected</strong></div>
+    <span id="status-dot" class="dot"></span>
+  </div>
+  <div class="small" id="dev-info" style="margin:6px 0 10px">&nbsp;</div>
+  <button id="btn-connect" class="full">Connect via BLE</button>
+  <button id="btn-refresh" class="ghost full" style="margin-top:8px" disabled>Refresh state</button>
+  <div class="small" id="auth-banner" style="display:none;margin-top:10px;padding:8px 10px;background:#3a2200;color:#ffb366;border-radius:6px;line-height:1.4"></div>
+</div>
+
+<div id="controls" class="disabled">
+
+  <div class="card">
+    <h2>Input mode</h2>
+    <div class="grid g2" id="mode-buttons">
+      <button data-mode="0" class="ghost">Bluetooth</button>
+      <button data-mode="3" class="ghost">AUX</button>
+      <button data-mode="1" class="ghost">USB drive</button>
+      <button data-mode="19" class="ghost">USB Sound Card</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Playback</h2>
+    <div class="grid g3">
+      <button id="tr-prev">⏮ Prev</button>
+      <button id="tr-play">⏯ Play/Pause</button>
+      <button id="tr-next">⏭ Next</button>
+    </div>
+    <div class="small" id="now-playing" style="display:none;margin-top:8px"></div>
+    <div id="scrub-row" style="margin-top:8px;display:none">
+      <div class="small" style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span id="scrub-cur">0:00</span><span id="scrub-total">0:00</span>
+      </div>
+      <input type="range" id="range-scrub" min="0" max="0" value="0" step="1">
+    </div>
+    <button id="btn-files" class="ghost full" style="margin-top:8px" disabled>📁 USB drive files</button>
+    <div class="small" id="files-status" style="margin-top:6px"></div>
+    <div id="seek-row" style="margin-top:10px;display:none">
+      <div class="small" style="margin-bottom:4px">Fine jump <span id="seek-label">0s</span></div>
+      <input type="range" id="range-seek" min="-120" max="120" value="0" step="1">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Max gain</h2>
+    <div class="small" style="margin-bottom:8px">The amp's overall loudness ceiling</div>
+    <div class="row">
+      <input type="range" id="range-volume" class="flex1" min="0" max="30" value="15">
+      <span id="vol-val" style="width:28px;text-align:center">15</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Bluetooth name</h2>
+    <div class="row">
+      <input type="text" id="input-name" class="flex1" maxlength="30" placeholder="e.g. Wuzhi Audio">
+    </div>
+    <div class="grid g2" style="margin-top:8px">
+      <button id="btn-name-now">Rename &amp; reboot now</button>
+      <button id="btn-name-later" class="ghost">Rename on next reboot</button>
+    </div>
+    <div class="small" style="margin-top:6px">The new name doesn't show up until the device reboots</div>
+  </div>
+
+  <div class="card">
+    <h2>Pairing PIN</h2>
+    <div class="row" style="margin-bottom:8px">
+      <label class="small"><input type="checkbox" id="chk-pin-auth"> Require PIN to pair</label>
+    </div>
+    <div class="row">
+      <input type="text" id="input-pin" class="flex1" maxlength="4" inputmode="numeric" placeholder="4-digit PIN">
+      <button id="btn-pin">Save</button>
+    </div>
+    <div class="small" style="margin-top:6px">Sets a 4-digit PIN for Bluetooth pairing.</div>
+  </div>
+
+  <div class="card">
+    <h2>Prompt chime</h2>
+    <div class="small" style="margin-bottom:8px">A short tone the amp plays on certain events, like powering on.</div>
+    <div class="row" style="margin-bottom:8px">
+      <label class="small"><input type="checkbox" id="chk-chime"> Chime enabled</label>
+    </div>
+    <div class="row">
+      <input type="range" id="range-chime" class="flex1" min="0" max="30" value="15">
+      <span id="chime-val" style="width:28px;text-align:center">15</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>Advanced</summary>
+      <div style="margin-top:14px">
+        <h2>Connection options</h2>
+        <div class="row" style="margin-bottom:8px">
+          <input type="text" id="input-prefix" value="Wuzhi" placeholder="name prefix filter" style="width:45%">
+          <span class="small">Only devices whose name starts with this are listed (empty = show all)</span>
+        </div>
+        <div class="row" style="flex-wrap:wrap">
+          <label class="small"><input type="checkbox" id="chk-auth" checked> Device auth</label>
+          <label class="small"><input type="checkbox" id="chk-wr"> Write with response</label>
+        </div>
+      </div>
+
+      <div style="margin-top:18px" id="eq-card">
+        <h2>Equalizer</h2>
+        <select id="eq-mode"></select>
+        <div class="eq" id="eq-bands"></div>
+        <div class="small" style="margin-top:8px" id="eq-note"></div>
+      </div>
+
+      <div style="margin-top:18px">
+        <h2>Indicator light</h2>
+        <div class="small" style="margin-bottom:8px">Adjusts the brightness of the front-panel indicator light, if your unit has one.</div>
+        <div class="row">
+          <input type="range" id="range-indicator" class="flex1" min="0" max="8" value="8">
+          <span id="indicator-val" style="width:28px;text-align:center">8</span>
+        </div>
+      </div>
+
+      <div style="margin-top:18px">
+        <h2>Device authenticity check</h2>
+        <div class="small" style="margin-bottom:8px">Asks the device to confirm it's a genuine Wuzhi unit.</div>
+        <div class="row">
+          <button id="btn-check-auth" class="ghost flex1">Check</button>
+          <span id="auth-check-result" class="small">–</span>
+        </div>
+      </div>
+
+      <div style="margin-top:18px">
+        <h2>Raw command</h2>
+        <div class="small" style="margin-bottom:8px">Sends a command directly — for troubleshooting or testing commands this app doesn't have a control for yet.</div>
+        <div class="row">
+          <input type="text" id="raw-op" placeholder="opcode (hex) e.g. 07" style="width:40%">
+          <input type="text" id="raw-params" placeholder="params hex e.g. FF 00 00 00 02">
+        </div>
+        <button id="btn-raw" class="ghost full" style="margin-top:8px">Send (frame + sequence number added)</button>
+      </div>
+
+      <div style="margin-top:18px">
+        <h2>Log</h2>
+        <div class="log" id="log">&gt; Ready. Needs Chrome/Edge (Web Bluetooth) over HTTPS or localhost.</div>
+        <div class="row" style="margin-top:8px">
+          <button id="btn-copylog" class="ghost flex1">Copy log</button>
+          <button id="btn-clearlog" class="ghost flex1">Clear</button>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+</div>
+
+<script>
+// ============================================================
+// JieLi RCSP device-auth cipher.
+// Ported from the OFFICIAL, Apache-2.0-licensed JieLi SDK source:
+// https://github.com/Jieli-Tech/WeChat-Mini-Program-OTA  (libs/jl_auth_2.0.0.js)
+// Verified byte-for-byte against this device's own captured handshake
+// (see chat log: random 4D86B3A5...BB98 -> response 143EBF5C...7A0132 under the
+// SDK's default link key, which is what this amp uses unless re-keyed).
+// ============================================================
+const JL_AUTH_T = [17,34,51,51,34,17];
+let JL_AUTH_KEY = [6,119,95,135,145,141,212,35,0,93,241,216,207,12,20,43]; // default link key
+
+const JL_AUTH_A = [[119,241,86,36,126,71,27,134,189,112,142,30,59,115,22,3],
+[100,172,40,90,201,179,55,197,10,16,183,163,186,177,151,70],
+[61,5,220,102,110,246,154,248,13,88,149,103,198,170,171,236],
+[160,104,155,150,212,235,191,67,73,54,233,106,137,216,195,138],
+[148,99,153,188,123,190,193,34,187,92,113,213,31,146,87,93],
+[143,68,65,29,81,230,64,23,251,253,25,50,52,184,97,42],
+[202,35,111,218,57,247,162,1,127,214,49,231,222,128,4,221],
+[44,89,130,175,168,224,15,205,161,18,62,48,209,28,208,58],
+[51,114,46,79,144,2,19,6,117,206,135,194,239,178,173,125],
+[56,21,225,82,159,122,108,47,39,196,226,129,169,207,141,192],
+[215,223,255,96,118,20,140,94,85,9,228,8,199,66,32,252],
+[210,80,145,217,76,98,158,232,185,166,249,26,0,33,11,250],
+[53,156,78,75,105,72,203,14,200,164,91,234,132,7,180,24],
+[244,174,107,219,167,204,63,139,74,12,60,37,229,84,77,69],
+[131,237,17,240,176,83,147,242,116,38,181,157,109,124,243,45],
+[241,86,36,126,71,27,134,189,112,142,30,59,115,22,3,182],
+[172,40,90,201,179,55,197,10,16,183,163,186,177,151,70,136]];
+
+const JL_AUTH_S1 = [1,45,226,147,190,69,21,174,120,3,135,164,184,56,207,63,8,103,9,148,235,38,168,107,189,24,52,27,187,191,114,247,64,53,72,156,81,47,59,85,227,192,159,216,211,243,141,177,255,167,62,220,134,119,215,166,17,251,244,186,146,145,100,131,241,51,239,218,44,181,178,43,136,209,153,203,140,132,29,20,129,151,113,202,95,163,139,87,60,130,196,82,92,28,232,160,4,180,133,74,246,19,84,182,223,12,26,142,222,224,57,252,32,155,36,78,169,152,158,171,242,96,208,108,234,250,199,217,0,212,31,110,67,188,236,83,137,254,122,93,73,201,50,194,249,154,248,109,22,219,89,150,68,233,205,230,70,66,143,10,193,204,185,101,176,210,198,172,30,65,98,41,46,14,116,80,2,90,195,37,123,138,42,91,240,6,13,71,111,112,157,126,16,206,18,39,213,76,79,214,121,48,104,54,117,125,228,237,128,106,144,55,162,94,118,170,197,127,61,175,165,229,25,97,253,77,124,183,11,238,173,75,34,245,231,115,35,33,200,5,225,102,221,179,88,105,99,86,15,161,49,149,23,7,58,40];
+const JL_AUTH_S2 = [128,0,176,9,96,239,185,253,16,18,159,228,105,186,173,248,192,56,194,101,79,6,148,252,25,222,106,27,93,78,168,130,112,237,232,236,114,179,21,195,255,171,182,71,68,1,172,37,201,250,142,65,26,33,203,211,13,110,254,38,88,218,50,15,32,169,157,132,152,5,156,187,34,140,99,231,197,225,115,198,175,36,91,135,102,39,247,87,244,150,177,183,92,139,213,84,121,223,170,246,62,163,241,17,202,245,209,23,123,147,131,188,189,82,30,235,174,204,214,53,8,200,138,180,226,205,191,217,208,80,89,63,77,98,52,10,72,136,181,86,76,46,107,158,210,61,60,3,19,251,151,81,117,74,145,113,35,190,118,42,95,249,212,85,11,220,55,49,22,116,215,119,167,230,7,219,164,47,70,243,97,69,103,227,12,162,59,28,133,24,4,29,41,160,143,178,90,216,166,126,238,141,83,75,161,154,193,14,122,73,165,44,129,196,199,54,43,127,67,149,51,242,108,104,109,240,2,40,206,221,155,234,94,153,124,20,134,207,229,66,184,64,120,45,58,233,100,31,146,144,125,57,111,224,137,48];
+
+const JL_AUTH_SP = new Set([0,3,4,7,8,11,12,15]);
+
+function jlAuth_r(t){ let a=0; for(let s=0;s<8;s++){ const e=((t[a]<<1)+t[a+1])&255; t[a+1]=(t[a]+t[a+1])&255; t[a]=e; a+=2; } }
+function jlAuth_h(t){ const e=t.slice(0,16);
+  t[0]=e[8];t[1]=e[11];t[2]=e[12];t[3]=e[15];t[4]=e[2];t[5]=e[1];t[6]=e[6];t[7]=e[5];
+  t[8]=e[10];t[9]=e[9];t[10]=e[14];t[11]=e[13];t[12]=e[0];t[13]=e[7];t[14]=e[4];t[15]=e[3]; }
+function jlAuth_n(t){ for(let a=0;a<17;a++){ const e=(t[a]>>>5)&255; t[a]=(t[a]<<3)&255; t[a]=(t[a]+e)&255; } }
+function jlAuth_c(key16, out){
+  for(let row=0;row<17;row++) for(let col=0;col<16;col++) out[row][col]=0;
+  const i_=new Array(17); i_[16]=0;
+  for(let h=0;h<16;h++){ i_[h]=key16[h]; i_[16]^=i_[h]; }
+  const r=new Array(17);
+  for(let h=0;h<16;h++){ out[0][h]=i_[h]; r[h]=i_[h]; }
+  r[16]=i_[16];
+  for(let h=0;h<16;h++){
+    jlAuth_n(r);
+    let s=h+1;
+    for(let col=0;col<16;col++){ out[h+1][col]=(r[s]+JL_AUTH_A[h+1][15-col])&255; if(++s>16) s=0; }
+  }
+}
+function jlAuth_u(t,c,roundkeys){
+  for(let u=0;u<16;u++){
+    if(JL_AUTH_SP.has(u)) c[u]=255&(c[u]^roundkeys[2*t][u]);
+    else c[u]=(c[u]+roundkeys[2*t][u])&255;
+  }
+  for(let u=0;u<16;u++) c[u]= JL_AUTH_SP.has(u) ? JL_AUTH_S1[c[u]] : JL_AUTH_S2[c[u]];
+  for(let u=0;u<16;u++){
+    if(JL_AUTH_SP.has(u)) c[u]=(c[u]+roundkeys[2*t+1][u])&255;
+    else c[u]=255&(c[u]^roundkeys[2*t+1][u]);
+  }
+  jlAuth_r(c); jlAuth_h(c); jlAuth_r(c); jlAuth_h(c); jlAuth_r(c); jlAuth_h(c); jlAuth_r(c);
+}
+function jlAuth_o(state, roundkeys, flag){
+  const s_=state.slice(0,16);
+  for(let round=0;round<8;round++){
+    if(round===2 && flag){
+      for(let h=0;h<16;h++){
+        if(JL_AUTH_SP.has(h)) state[h]=255&(s_[h]^state[h]);
+        else state[h]=(s_[h]+state[h])&255;
+      }
+    }
+    jlAuth_u(round, state, roundkeys);
+  }
+  for(let h=0;h<16;h++){
+    if(JL_AUTH_SP.has(h)) state[h]=255&(state[h]^roundkeys[16][h]);
+    else state[h]=(state[h]+roundkeys[16][h])&255;
+  }
+}
+// Encrypts a 16-byte challenge; returns a 17-byte Uint8Array: [1, ...16-byte response]
+function jlAuthEncrypt(data16, key16){
+  key16 = key16 || JL_AUTH_KEY;
+  const out = data16.slice(0,16);
+  const roundkeys = []; for(let i=0;i<17;i++) roundkeys.push(new Array(16).fill(0));
+  const r_arr = new Array(16);
+  { let n=0; const u=5; for(let A=0;A<16;A++){ r_arr[A]=JL_AUTH_T[n]; if(++n>u) n=0; } }
+  jlAuth_c(key16, roundkeys);
+  jlAuth_o(out, roundkeys, 0);
+  for(let A=0;A<16;A++){ out[A]^=data16[A]; out[A]=(out[A]+r_arr[A])&255; }
+  const h_arr=new Array(16);
+  h_arr[0]=(key16[0]+233)&255; h_arr[1]=229^key16[1]; h_arr[2]=(key16[2]+223)&255; h_arr[3]=193^key16[3];
+  h_arr[4]=(key16[4]+179)&255; h_arr[5]=167^key16[5]; h_arr[6]=(key16[6]+149)&255; h_arr[7]=131^key16[7];
+  h_arr[8]=233^key16[8]; h_arr[9]=(key16[9]+229)&255; h_arr[10]=223^key16[10]; h_arr[11]=(key16[11]+193)&255;
+  h_arr[12]=179^key16[12]; h_arr[13]=(key16[13]+167)&255; h_arr[14]=149^key16[14]; h_arr[15]=(key16[15]+131)&255;
+  jlAuth_c(h_arr, roundkeys);
+  jlAuth_o(out, roundkeys, 1);
+  return Uint8Array.from([1, ...out]);
+}
+
+// ---------- Constants (from decompiled JieLi RCSP classes) ----------
+const PROFILES = [
+  { svc:'0000ae00-0000-1000-8000-00805f9b34fb', w:'0000ae01-0000-1000-8000-00805f9b34fb', n:'0000ae02-0000-1000-8000-00805f9b34fb' },
+  { svc:'0000fd00-0000-1000-8000-00805f9b34fb', w:'0000fd01-0000-1000-8000-00805f9b34fb', n:'0000fd02-0000-1000-8000-00805f9b34fb' }
+];
+const CMD = { FILE_LIST_PUSH:1, GET_TARGET_INFO:3, GET_SYS_INFO:7, SET_SYS_INFO:8, SYS_INFO_AUTO_UPDATE:9, FUNCTION:14, START_FILE_BROWSE:12, STOP_FILE_BROWSE:13, ADV_SETTINGS:192, REBOOT:231, CUSTOM:255 };
+// opcodes 12/13 confirmed from a real decompiled FileBrowseCmdHandler.java (com.jieli.rcsp.bean.cmdHandler) —
+// not guessed. Opcode 1 (FILE_LIST_PUSH) was not in any decompiled source seen so far; it's
+// confirmed empirically from a real capture: after sending opcode 12 (which just gets ACKed with
+// no data), the device pushes the actual folder listing as its own opcode-1 command, whose payload
+// decodes perfectly against FileBrowseUtil.parseData()'s per-entry layout (see parseFileListPush
+// below) with nothing left over. See the "USB-drive file browser" section below for the full citation.
+const DEVICE_REBOOT = 0; // Constants.DEVICE_REBOOT, the single param RebootDeviceCmd sends
+// "Custom" sub-protocol (opcode 255 / 0xFF): used by the OEM app's Device Settings screen for
+// PIN code / PIN auth, prompt chime, indicator light and the "check authenticity" diagnostic.
+// Confirmed from a real decompiled DeviceSettingsFragment.java (com.jieli.audio.ui.settings.device),
+// not guessed: the payload is its own little sub-frame, [0xAA, len, subCmd, ...params, 0x55],
+// carried as the params of a normal CMD_CUSTOM (255) RCSP packet. len = 1 (subCmd) + params.length.
+const CUSTOM_SUB = { CHECK_AUTHENTIC:1, PASSWORD:3, INDICATOR:10, BEEP:2,
+  PASSWORD_READ:19, BEEP_READ:18, INDICATOR_READ:26, MODE_SELECT:8 };
+const FN_PUBLIC = 0xFF;
+const ATTR = { BATTERY:0, VOLUME:1, EQ:4, MODE:6, EQ_PRESET:12 };
+// SYS_INFO_AUTO_UPDATE pushes with fn==1 (AttrAndFunCode's SYS_INFO_FUNCTION_MUSIC) carry their
+// own payload shape instead of the FN_PUBLIC LTV-attribute one — see parseMusicStatus().
+const MUSIC_FN = 1;
+const ADV_DEVICE_NAME = 1;
+const PLATFORM = 0; // Android value; the official app sends buildGetTargetInfoCmd(-1) => platform 0
+// 19 is a made-up id of our own (not a byte seen on the wire) just so Sound Card has a slot in
+// this UI's curMode/markMode bookkeeping alongside the real ATTR.MODE values 0/1/2/3/4. Real
+// captures disproved two earlier theories in a row: Sound Card does NOT show up as ATTR.MODE==19
+// (GET_SYS_INFO's ATTR.MODE/attr 6 stayed "BT" the entire time Sound Card was actually selected
+// and playing, confirmed 5 separate times), and the CUSTOM sub-command 8 status push isn't
+// per-mode either (same byte after every switch, regardless of target). There is no confirmed
+// live "Sound Card is active" signal from the device at all — see soundCardActive below for how
+// the UI tracks it instead (optimistically, matching how the OEM app itself behaves).
+const MODE_NAMES = {0:'BT',1:'Music',2:'RTC',3:'AUX',4:'FM',19:'Sound Card'};
+const EQ_NAMES = ['Normal','Rock','Pop','Classic','Jazz','Country','Custom'];
+const EQ_CUSTOM = 6;
+const EQ_MIN = -12, EQ_MAX = 12;
+
+// ---------- State ----------
+const $ = id => document.getElementById(id);
+const hex = a => Array.from(a).map(b => b.toString(16).padStart(2,'0')).join(' ').toUpperCase();
+let dev=null, wChar=null, nChar=null, sn=0, rx=[], pending=new Map();
+let curMode=0, eq={n:10,freqs:[],vals:Array(10).fill(0),dynamic:false,mode:0};
+// True once the Sound Card button has been clicked and we haven't since clicked a different
+// input. The device gives us no ongoing "current source" confirmation for Sound Card (see
+// ATTR.MODE handling below), so — same as the OEM app — we track this optimistically on the
+// client rather than from a device status field.
+let soundCardActive=false;
+let writeQueue = Promise.resolve();
+
+function log(m){ const l=$('log'); l.textContent += "\n> "+m; l.scrollTop=l.scrollHeight; }
+
+// ---------- Framing: FE DC BA | flag | op | len(2,BE) | payload | EF ----------
+// command  flag 0xC0 (cmd + needs response), payload = [sn, ...params]
+// response flag 0x00, payload = [status, sn, ...data]
+function buildCommand(op, params, needResp=true){
+  const body = needResp ? [sn, ...params] : [...params];
+  return Uint8Array.from([0xFE,0xDC,0xBA, needResp?0xC0:0x80, op, (body.length>>8)&0xFF, body.length&0xFF, ...body, 0xEF]);
+}
+function buildResponse(op, snVal, status=0, data=[]){
+  const body=[status, snVal, ...data];
+  return Uint8Array.from([0xFE,0xDC,0xBA,0x00,op,(body.length>>8)&0xFF,body.length&0xFF,...body,0xEF]);
+}
+// LTV: [len (incl. type), type, ...value]
+const ltv = (type, data) => [data.length+1, type, ...data];
+function parseLTV(b, start){
+  const out=[]; let i=start;
+  while(i<b.length){
+    const l=b[i]; if(l===0||i+1+l>b.length+0) { if(l===0) break; }
+    const type=b[i+1]; const data=b.slice(i+2, i+1+l);
+    out.push({type,data}); i+=1+l;
+  }
+  return out;
+}
+const u32 = v => [(v>>>24)&0xFF,(v>>>16)&0xFF,(v>>>8)&0xFF,v&0xFF];
+const s8 = v => v>127 ? v-256 : v;
+
+// Builds the [0xAA, len, subCmd, ...params, 0x55] custom sub-frame and sends it as a CMD_CUSTOM packet.
+function customCmd(subCmd, params, label){
+  const body=[subCmd, ...params];
+  const frame=[0xAA, body.length, ...body, 0x55];
+  return cmd(CMD.CUSTOM, frame, label || ('custom sub 0x'+subCmd.toString(16)));
+}
+// ASCII-digit PIN <-> bytes, matching the OEM app's str2HexStr/hexStringToByte round-trip for a
+// plain ASCII numeric string (e.g. "1234" -> [0x31,0x32,0x33,0x34]).
+const pinToBytes = s => Array.from(new TextEncoder().encode(s));
+const bytesToPin = b => new TextDecoder().decode(Uint8Array.from(b));
+
+async function writeRaw(bytes){
+  // chunk to 20 bytes so we never exceed the default ATT MTU
+  writeQueue = writeQueue.then(async()=>{
+    for(let i=0;i<bytes.length;i+=20){
+      const c=bytes.slice(i,i+20);
+      if(wChar.properties.writeWithoutResponse && !$('chk-wr').checked) await wChar.writeValueWithoutResponse(c);
+      else await wChar.writeValue(c);
+    }
+  });
+  return writeQueue;
+}
+
+function cmd(op, params, label, timeout=3000){
+  if(!wChar) return Promise.reject(new Error('not connected'));
+  sn=(sn+1)&0xFF;
+  const mySn=sn, key=(op<<8)|mySn;
+  const pkt=buildCommand(op, params);
+  log("TX "+(label||('op 0x'+op.toString(16)))+": "+hex(pkt));
+  return new Promise((resolve)=>{
+    const t=setTimeout(()=>{ pending.delete(key); log("  ↳ timeout (no response) for "+(label||op)); resolve(null); }, timeout);
+    pending.set(key,{resolve,t});
+    writeRaw(pkt).catch(e=>{ clearTimeout(t); pending.delete(key); log("TX error: "+e.message); resolve(null); });
+  });
+}
+
+// ---------- RX ----------
+function onNotify(ev){
+  const bytes=Array.from(new Uint8Array(ev.target.value.buffer));
+  // Non-RCSP data (e.g. device auth challenge) arrives unframed
+  if(rx.length===0 && bytes[0]!==0xFE){
+    handleAuthData(bytes);
+    return;
+  }
+  rx.push(...bytes);
+  for(;;){
+    let i=-1;
+    for(let k=0;k+2<rx.length;k++){ if(rx[k]===0xFE&&rx[k+1]===0xDC&&rx[k+2]===0xBA){i=k;break;} }
+    if(i<0){ rx=rx.slice(-2); return; }
+    if(i>0) rx=rx.slice(i);
+    if(rx.length<8) return;
+    const len=(rx[5]<<8)|rx[6], total=7+len+1;
+    if(rx.length<total) return;
+    if(rx[total-1]!==0xEF){ rx=rx.slice(1); continue; }
+    const pkt=rx.slice(0,total); rx=rx.slice(total);
+    handlePacket(pkt);
+  }
+}
+
+function handlePacket(p){
+  log("RX: "+hex(p));
+  const flag=p[3], isCmd=(flag&0x80)!==0, needResp=(flag&0x40)!==0, op=p[4];
+  const len=(p[5]<<8)|p[6], payload=p.slice(7,7+len);
+  if(!isCmd){
+    const status=payload[0], rsn=payload[1], data=payload.slice(2);
+    const key=(op<<8)|rsn, pd=pending.get(key);
+    if(pd){ clearTimeout(pd.t); pending.delete(key); pd.resolve({status,data}); }
+    if(status!==0) log("  ↳ status "+status+" for op 0x"+op.toString(16));
+    dispatch(op,data);
+  } else {
+    let data=payload, rsn=0;
+    if(needResp){ rsn=payload[0]; data=payload.slice(1); }
+    dispatch(op,data);
+    if(needResp) writeRaw(buildResponse(op,rsn,0)).catch(()=>{});
+  }
+}
+
+function dispatch(op,data){
+  if(op===CMD.GET_SYS_INFO) parseSysInfo(data,false);
+  else if(op===CMD.SYS_INFO_AUTO_UPDATE) parseSysInfo(data,true);
+  else if(op===CMD.GET_TARGET_INFO) parseTargetInfo(data);
+  else if(op===CMD.CUSTOM) parseCustom(data);
+  else if(op===CMD.START_FILE_BROWSE) parseFileBrowseAck(data);
+  else if(op===CMD.FILE_LIST_PUSH) parseFileListPush(data);
+  else if(op===CMD.STOP_FILE_BROWSE) parseFileBrowseStop(data);
+}
+
+// ---------- USB-drive file browser (RCSP file_op commands, opcodes 12/13) ----------
+// Confirmed from real decompiled source, not guessed:
+//   FileBrowseCmdHandler.java: opcode 12 = START_FILE_BROWSE (list a folder, or select a file to
+//   play), opcode 13 = STOP_FILE_BROWSE, opcode 31 = DEL_DEV_FILE.
+//   FileBrowseUtil.coverPathDataToCmd(): wraps the PathData payload in the exact same outer frame
+//   this app already builds for every other command (FE DC BA | C0 | op | len | [sn,...] | EF) —
+//   the existing cmd() helper below already produces that frame unchanged, so no new framing code
+//   is needed, just the right opcode and payload.
+//   PathData.toParamData(): the payload layout, byte for byte —
+//     [0]      type        (0 = browse a folder, 1 = play a file)
+//     [1]      readNum     (page size)
+//     [2..3]   startIndex  (big-endian uint16)
+//     [4..7]   devHandler  (big-endian uint32 — FileBrowseUtil.getDevName(): 0=USB,1=SD0,2=SD1,3=Flash,4=LineIn)
+//     [8..9]   path byte-length = path.length*4 (big-endian uint16)
+//     [10..]   path cluster IDs, each big-endian uint32, root -> target
+//   FileBrowseManager.playFile(): a root-level file is played with path=[fileCluster] only (its
+//   RegFile is built with no parent set, so the usual ancestor-walk never runs) — read directly off
+//   that method, not inferred.
+//   The device's immediate reply to opcode 12 (confirmed from a real capture) carries no data at
+//   all — just the usual status/sn ack, zero-length. The actual file/folder entries arrive
+//   separately afterward as the device's own opcode-1 command (see CMD.FILE_LIST_PUSH above),
+//   decoded by parseFileListPush() below using FileBrowseUtil.parseData()'s per-entry layout:
+//     byte0 bit0(0x01)=isFile, bit1(0x02)=GBK name (else UTF-16LE), bits2-3(0x0C)=devIndex
+//     bytes1-4=cluster (BE uint32), bytes5-6=fileNum (BE uint16), byte7=name length, then the name
+//   Confirmed byte-for-byte against a real capture of browsing the USB drive's root: after a
+//   2-byte lead-in whose meaning isn't confirmed (logged, not interpreted), entries run back-to-
+//   back and consume the payload exactly to its last byte — decoded to two real folders,
+//   "Beethoven" (cluster 39) and "The Greatest Hits of Swing (1 of 2)" (cluster 33416).
+//   The device marks the listing complete by sending its own STOP_FILE_BROWSE (opcode 13) command
+//   with a trailing 0x01 byte (confirmed from the same capture) — parseFileBrowseStop() below. The
+//   existing generic handlePacket() already auto-ACKs that, since it doesn't special-case opcodes.
+//   Paging (loadMore, for folders bigger than one page) hasn't been captured, so isn't implemented.
+const FILE_BROWSE_DEV = { USB:0, SD0:1, SD1:2, FLASH:3, LINEIN:4 };
+const FILE_BROWSE_TYPE = { FOLDER:0, FILE:1 };
+function buildPathDataParam(type, devHandler, readNum, startIndex, path){
+  const out=[type&0xFF, readNum&0xFF, (startIndex>>8)&0xFF, startIndex&0xFF, ...u32(devHandler)];
+  const pathBytes=[]; path.forEach(c=>pathBytes.push(...u32(c)));
+  out.push((pathBytes.length>>8)&0xFF, pathBytes.length&0xFF, ...pathBytes);
+  return out;
+}
+// path: array of ancestor cluster IDs down to (and including) the folder being opened; [0] = root.
+let fileBrowse={path:[0], entries:[], loading:false};
+function browseFolder(path){
+  fileBrowse.path=path; fileBrowse.entries=[]; fileBrowse.loading=true;
+  $('files-status').textContent='Requesting file list…';
+  renderFileList();
+  return cmd(CMD.START_FILE_BROWSE, buildPathDataParam(FILE_BROWSE_TYPE.FOLDER, FILE_BROWSE_DEV.USB, 10, 1, path), 'Browse USB folder '+JSON.stringify(path));
+}
+function browseUsbRoot(){ return browseFolder([0]); }
+// Real playFile() behavior (confirmed by reading FileBrowseManager.playFile() directly): the file
+// it builds a path for has no parent set, so the path is always just [fileCluster] — regardless of
+// how deeply nested the file actually is. Not a simplification on our part; that's the real code.
+function playFileByCluster(cluster, label){
+  return cmd(CMD.START_FILE_BROWSE, buildPathDataParam(FILE_BROWSE_TYPE.FILE, FILE_BROWSE_DEV.USB, 10, 1, [cluster]), 'Play USB file'+(label?(' "'+label+'"'):'')+' (cluster '+cluster+')');
+}
+function parseFileBrowseAck(data){
+  if(!data || !data.length) return; // real capture: this ack carries no data, just status/sn
+  log("  file browse ack carried unexpected data: "+hex(data));
+}
+function parseFileListPush(data){
+  if(!data || data.length<2) return;
+  log("  file list push header (2 bytes, meaning unconfirmed): "+hex(data.slice(0,2)));
+  let i=2;
+  const entries=[];
+  while(i+7<data.length){
+    const flags=data[i];
+    const isFile=(flags&1)===1, isAnsi=(flags&2)===2, devIndex=(flags&0x0C)>>2;
+    const cluster=((data[i+1]<<24)|(data[i+2]<<16)|(data[i+3]<<8)|data[i+4])>>>0;
+    const fileNum=(data[i+5]<<8)|data[i+6];
+    const nameLen=data[i+7];
+    const nameBytes=data.slice(i+8,i+8+nameLen);
+    let name='(undecodable)';
+    try{
+      if(isAnsi) name=new TextDecoder('gbk').decode(Uint8Array.from(nameBytes));
+      else { const chars=[]; for(let k=0;k+1<nameBytes.length;k+=2) chars.push(nameBytes[k]); name=new TextDecoder().decode(Uint8Array.from(chars)); }
+    }catch(e){}
+    entries.push({isFile,devIndex,cluster,fileNum,name});
+    i+=8+nameLen;
+  }
+  entries.forEach(e=>log("  "+(e.isFile?'file':'folder')+": \""+e.name+"\" (cluster "+e.cluster+")"));
+  fileBrowse.entries.push(...entries);
+  renderFileList();
+}
+// data[0] is a StopFileBrowseCmd "reason" code (confirmed from decompiled MusicPlayControlImpl's
+// onDeviceCommand, which special-cases getReason()==2 by resetting its displayed elapsed time to
+// 0). Two values confirmed so far:
+//   1 = folder listing finished (seen after START_FILE_BROWSE with type=FOLDER)
+//   2 = a new file was selected/play started (seen after START_FILE_BROWSE with type=FILE, in a
+//       real capture of clicking a track) — the OEM app treats this as "elapsed time resets to 0"
+function parseFileBrowseStop(data){
+  const reason = data && data.length ? data[0] : null;
+  const isEnd = reason===1;
+  const trackStarted = reason===2;
+  let desc = ' (unrecognized reason)';
+  if(isEnd) desc=' (listing complete)';
+  else if(trackStarted) desc=' (new track selected, elapsed time reset)';
+  log("  file browse stop: "+hex(data||[])+desc);
+  if(isEnd){ fileBrowse.loading=false; renderFileList(); }
+  // Not acting on reason 2 beyond logging it: the real capture that revealed it shows the very next
+  // music-status push still reporting "paused" right after, so we don't yet know enough to safely
+  // flip any UI state off the back of this byte alone.
+}
+// Alphanumeric (natural) sort, so e.g. "symphony2" sorts before "symphony10". Display-order only —
+// this doesn't affect the device's own next/prev track order, which is whatever the firmware uses.
+const fileNameCollator = new Intl.Collator(undefined, {numeric:true, sensitivity:'base'});
+function renderFileList(){
+  const box=$('files-status'); box.innerHTML='';
+  if(fileBrowse.loading && !fileBrowse.entries.length){ box.textContent='Requesting file list…'; return; }
+  if(fileBrowse.path.length>1){
+    const up=document.createElement('button'); up.className='ghost full'; up.textContent='⬆ Up'; up.style.marginBottom='6px';
+    up.onclick=()=>browseFolder(fileBrowse.path.slice(0,-1));
+    box.appendChild(up);
+  }
+  if(!fileBrowse.entries.length){
+    const p=document.createElement('div'); p.className='small'; p.textContent=fileBrowse.loading?'':'(empty)'; box.appendChild(p); return;
+  }
+  const sorted=[...fileBrowse.entries].sort((a,b)=>fileNameCollator.compare(a.name,b.name));
+  sorted.forEach(e=>{
+    const b=document.createElement('button'); b.className='ghost full'; b.style.marginBottom='4px'; b.style.textAlign='left';
+    b.textContent=(e.isFile?'🎵 ':'📁 ')+e.name;
+    b.onclick=()=> e.isFile ? playFileByCluster(e.cluster, e.name) : browseFolder([...fileBrowse.path, e.cluster]);
+    box.appendChild(b);
+  });
+}
+
+// data here is the custom sub-frame itself: [0xAA, len, subCmd, ...params, 0x55] (the device
+// echoes this same shape back, whether answering our read request or just pushing a status
+// update) — matches DeviceSettingsFragment's onDeviceCommand() parsing data[2] as the subCmd.
+function parseCustom(data){
+  if(!data || !data.length) return; // the plain ACK to our own request carries no data; the real
+                                     // answer always arrives as a separate device-initiated packet
+  if(data[0]!==0xAA){ log("  custom: unrecognized frame "+hex(data)); return; }
+  const sub=data[2];
+  switch(sub){
+    case CUSTOM_SUB.CHECK_AUTHENTIC: {
+      // data[3..12]: a 10-digit ASCII serial/batch code (three sub-blocks the OEM app decodes but
+      // never actually compares — dead code from the decompile). data[13..18]: a 6-byte "magic"
+      // tail. The OEM app's byte2HexStr(bytes,count) is NOT a normal 2-hex-chars-per-byte
+      // converter — it only takes the LOW NIBBLE of each byte as a single hex digit:
+      //   for (i=0;i<count;i++) sb.append(mChars[bArr[i] & 15]);
+      // So 6 bytes -> a 6-character string -> parsed as decimal and compared to 180418.
+      // Confirmed against a real capture: tail bytes 01 08 00 04 01 08 -> low nibbles 1,8,0,4,1,8
+      // -> "180418" -> matches exactly.
+      log("  authenticity response ("+data.length+" bytes): "+hex(data));
+      if(data.length>=19){
+        const serial = (()=>{ try{ return new TextDecoder().decode(Uint8Array.from(data.slice(3,13))); }catch(e){ return null; } })();
+        const tail=data.slice(13,19);
+        const tailDigits=tail.map(b=>(b&0x0F).toString(16)).join('');
+        const val=parseInt(tailDigits,10);
+        log("  serial: "+(serial||'(undecodable)')+" | tail bytes (idx 13-18): "+hex(tail)+" -> low-nibble digits \""+tailDigits+"\" -> decimal "+val+" (want 180418)");
+        $('auth-check-result').textContent = (val===180418) ? 'Verified genuine' : 'Verification failed';
+      } else {
+        log("  authenticity response shorter than expected (need >=19 bytes, got "+data.length+") — can't evaluate, indices may not line up for this firmware.");
+        $('auth-check-result').textContent = 'Unexpected response (see log)';
+      }
+      break;
+    }
+    case CUSTOM_SUB.PASSWORD_READ: {
+      if(data.length>=9){
+        const enabled=data[3]!==0, pin=bytesToPin(data.slice(4,8));
+        $('chk-pin-auth').checked=enabled; $('input-pin').value=pin;
+      }
+      break;
+    }
+    case CUSTOM_SUB.BEEP_READ: {
+      if(data.length>=6){
+        const enabled=data[3]!==0, vol=data[4];
+        $('chk-chime').checked=enabled; $('range-chime').value=vol; $('chime-val').textContent=vol;
+      }
+      break;
+    }
+    case CUSTOM_SUB.INDICATOR_READ: case CUSTOM_SUB.INDICATOR: {
+      if(data.length>=4){
+        const v=data[3]; $('range-indicator').value=v; $('indicator-val').textContent=v;
+      }
+      break;
+    }
+    case CUSTOM_SUB.MODE_SELECT: {
+      // The device pushes this back, unprompted, after a mode-select write (CUSTOM sub-cmd 8) —
+      // but it's just a generic "accepted" ack, not a per-mode status: real captures confirm it
+      // carries the exact same byte (0x80) after switching to BT, AUX, *or* Sound Card, so there's
+      // nothing here to distinguish which mode was actually selected. (Originally mistook this for
+      // a Sound Card indicator from a single sample — a wider capture disproved that.) Logged for
+      // visibility only; detection is handled elsewhere (see ATTR.MODE below and soundCardActive).
+      if(data.length>=4) log("  mode-select ack: 0x"+data[3].toString(16));
+      break;
+    }
+    default: log("  custom sub 0x"+sub.toString(16)+": "+hex(data));
+  }
+}
+
+// ---------- PIN / prompt chime / indicator state (source of truth sent on every command,
+// matching the OEM app's DeviceSettingsFragment — it always resends BOTH the flag and the
+// value together, there's no "just flip the toggle" wire message) ----------
+let pinAuthState={enabled:true,pin:'1111'};
+let chimeState={enabled:false,vol:15};
+function sendPinAuth(){
+  const pin=$('input-pin').value.trim();
+  if(!/^[0-9]{4}$/.test(pin)){ log("PIN must be exactly 4 digits."); return; }
+  pinAuthState.pin=pin;
+  customCmd(CUSTOM_SUB.PASSWORD,[pinAuthState.enabled?1:0,...pinToBytes(pin)],'Set PIN auth '+(pinAuthState.enabled?'on':'off')+' ("'+pin+'")');
+}
+function sendChime(){
+  customCmd(CUSTOM_SUB.BEEP,[chimeState.enabled?1:0, chimeState.vol],'Set prompt chime '+(chimeState.enabled?'on':'off')+' vol '+chimeState.vol);
+}
+
+function parseTargetInfo(data){
+  const attrs=parseLTV(data,0);
+  let name=null;
+  attrs.forEach(a=>{
+    log("  target attr "+a.type+": "+hex(a.data));
+    if(a.type===16||a.type===31) { try{ name=new TextDecoder().decode(Uint8Array.from(a.data)); }catch(e){} }
+  });
+  $('dev-info').textContent = (dev&&dev.name ? dev.name : '') + (name?(' · '+name):'');
+  // Pre-fill the rename field with the device's current name, so editing it is a tweak rather
+  // than retyping the whole thing. Only when the box is still empty, so we don't clobber a
+  // name the person is already mid-edit on a reconnect.
+  if(name && !$('input-name').value) $('input-name').value=name;
+}
+
+// `data` for a polled GET_SYS_INFO response is [fn, ...LTV attrs]. An unsolicited
+// SYS_INFO_AUTO_UPDATE push (the device telling us something changed on its own, e.g. a USB
+// Sound Card being plugged in) prefixes one extra byte first: a running packet-sequence counter
+// shared with the device's other spontaneous notifications — confirmed from a real capture by
+// matching this counter's value against the interleaved CMD_ADV_DEVICE_NOTIFY beacons, which
+// carry the exact same incrementing counter in the same position. Without skipping that byte,
+// every push was being misread as "function <counter> (not handled)" and silently dropped, so
+// a mode change made by something other than this app (like plugging in a USB Sound Card) never
+// reached the UI until the next manual refresh.
+function parseSysInfo(data,isPush){
+  if(isPush) data=data.slice(1);
+  if(data.length<2) return;
+  const fn=s8(data[0])&0xFF;
+  if(fn===MUSIC_FN){ parseMusicStatus(data); return; }
+  const attrs=parseLTV(data,1);
+  if(fn!==FN_PUBLIC){ log("  sysinfo for function "+fn+" (not handled)"); return; }
+  attrs.forEach(a=>{
+    const d=a.data; if(!d.length) return;
+    switch(a.type){
+      case ATTR.BATTERY: { const b=d[0]; log("  battery: "+(b>100 ? ((b&0x7F)+'% (charging)') : (b+'%'))); break; } // not shown in the UI (mains-powered amp), still logged if present
+      case ATTR.VOLUME: setVolUI(d[0]); break;
+      case ATTR.MODE: {
+        // Confirmed from multiple real captures: this attribute never reports Sound Card — it
+        // keeps reading "BT" the entire time Sound Card is actually selected and playing. So while
+        // soundCardActive is set (see the mode-button handler below), we log what the device says
+        // but don't let it override the UI's optimistic Sound Card highlight.
+        log("  mode: "+(MODE_NAMES[d[0]] ?? d[0])+(soundCardActive?' (device-reported; UI still shows Sound Card)':''));
+        if(!soundCardActive){ curMode=d[0]; markMode(); }
+        break;
+      }
+      case ATTR.EQ: parseEq(d); break;
+      case ATTR.EQ_PRESET: parseEqPreset(d); break;
+      default: log("  public attr "+a.type+": "+hex(d));
+    }
+  });
+}
+
+// Layout confirmed from the real decompiled SDK parser (BTEventCallbackManager.parseMusicData(),
+// the code that builds the MusicStatusInfo object MusicPlayControlImpl.this.duration actually
+// comes from) — this push is fn(1 byte) + one TLV attribute, attribute type 0:
+//   data[0]=fn(1)  data[1]=attr length (0x0B=11: 1 type byte + 10 bytes of attr data)
+//   data[2]=attr type (0x00)  data[3]=attrData[0]=flags, bit0=isPlay (confirmed: matches our
+//     data[3]===1-playing/2-paused fix, since 1&1=1 and 2&1=0)
+//   data[4..7]=attrData[1..4]=CURRENT TIME, big-endian uint32, in SECONDS (the SDK does
+//     bytesToInt(...)*1000 to store it in ms — this is the real live playback position)
+//   data[8..11]=attrData[5..8]=TOTAL TIME, big-endian uint32, in SECONDS (the real track
+//     duration) — confirmed byte-for-byte: the capture of a track the user said was exactly 3:00
+//     read data[8..11] as 00 00 00 B4 = 180 seconds = 3:00 exactly; another track read 00 00 00
+//     D2 = 210s = 3:30, constant across every push for that file
+//   data[12]=attrData[9]=currentDev
+// What we'd previously mislabeled "a 16-bit id, not the real cluster" at data[10..11] was always
+// just the low 16 bits of this same totalTime field — it only ever looked like a per-file id
+// because these tracks' durations happen to fit in 16 bits.
+// A second, longer push shape additionally carries the track title: data[13]=length of
+// everything from data[14] to the end. data[14]=a flags byte matching the file-list-push flags
+// byte (bit0=isFile). data[15..18]=the REAL, full-resolution file-browse cluster as a big-endian
+// uint32 — confirmed byte-for-byte against a real TX play-by-cluster request. data[19] is the
+// high byte of the title's first UTF-16LE char pair (always 0x00 so far). data[20..]=title as
+// UTF-16LE, then a constant 3-byte trailer (02 02 01).
+let nowPlaying={title:null,playing:false,hasData:false,cluster:null,currentTime:null,totalTime:null,lastSyncMs:0};
+function parseMusicStatus(data){
+  if(data.length<13) { log("  music status (short, unparsed): "+hex(data)); return; }
+  const playing = (data[3]&1)===1;
+  const currentTime = ((data[4]<<24)|(data[5]<<16)|(data[6]<<8)|data[7])>>>0;
+  const totalTime = ((data[8]<<24)|(data[9]<<16)|(data[10]<<8)|data[11])>>>0;
+  const currentDev = data[12];
+  let title=null, cluster=null;
+  if(data.length>16){
+    cluster = ((data[15]<<24)|(data[16]<<16)|(data[17]<<8)|data[18])>>>0;
+    const titleBytes=data.slice(20,data.length-3);
+    try{
+      // UTF-16LE: drop every other (high) byte rather than relying on a specific TextDecoder label
+      const chars=[]; for(let i=0;i+1<titleBytes.length;i+=2) chars.push(titleBytes[i]);
+      title=new TextDecoder().decode(Uint8Array.from(chars));
+    }catch(e){}
+  }
+  log("  music status: "+(playing?'playing':'paused')+", "+fmtTime(currentTime)+" / "+fmtTime(totalTime)+(cluster!==null?(', cluster '+cluster):'')+(title?(', title "'+title+'"'):''));
+  nowPlaying.playing=playing; nowPlaying.hasData=true;
+  nowPlaying.currentTime=currentTime; nowPlaying.totalTime=totalTime; nowPlaying.lastSyncMs=Date.now();
+  if(title) nowPlaying.title=title;
+  if(cluster!==null) nowPlaying.cluster=cluster;
+  updateNowPlayingUI();
+}
+function fmtTime(sec){
+  sec=Math.max(0,Math.round(sec));
+  const m=Math.floor(sec/60), s=sec%60;
+  return m+':'+(s<10?'0':'')+s;
+}
+// Ticks the displayed position forward once a second while playing, exactly like the OEM app's
+// own mRunnable (System.currentTimeMillis()-based local counter between real status pushes) —
+// purely cosmetic between syncs, since parseMusicStatus() above re-syncs to the device's real
+// value on every push.
+setInterval(()=>{
+  if(nowPlaying.playing && nowPlaying.hasData && curMode===1){
+    const elapsed=Math.floor((Date.now()-nowPlaying.lastSyncMs)/1000);
+    updateNowPlayingUI(nowPlaying.currentTime+elapsed);
+  }
+},1000);
+let scrubDragging=false; // true while the user is actively dragging the absolute scrub slider
+function updateNowPlayingUI(displayCurrentTime){
+  const el=$('now-playing');
+  if(curMode!==1 || !nowPlaying.hasData){ el.style.display='none'; $('scrub-row').style.display='none'; return; }
+  el.style.display='block';
+  el.textContent=(nowPlaying.title ? ('"'+nowPlaying.title+'"') : 'Now playing')+' — '+(nowPlaying.playing?'Playing':'Paused');
+  const cur = displayCurrentTime!=null ? displayCurrentTime : nowPlaying.currentTime;
+  const scrub=$('scrub-row');
+  if(nowPlaying.totalTime>0 && cur!=null){
+    scrub.style.display='block';
+    $('scrub-cur').textContent=fmtTime(cur);
+    $('scrub-total').textContent=fmtTime(nowPlaying.totalTime);
+    if(!scrubDragging){
+      const bar=$('range-scrub');
+      bar.max=String(nowPlaying.totalTime);
+      bar.value=String(Math.min(cur,nowPlaying.totalTime));
+    }
+  } else {
+    scrub.style.display='none';
+  }
+}
+// Absolute scrub bar: the real OEM app's seekTo(absoluteMs) just computes a relative delta against
+// its own locally-tracked position and sends the same fast-forward/rewind command we already send
+// (confirmed in MusicPlayControlImpl.seekTo()) — there's no separate "absolute seek" command on the
+// wire. So this does the same thing: figure out the delta from the last known real position and
+// hand it to sendSeek(), which already sends the grounded relative FUNCTION command.
+function scrubTo(targetSec){
+  if(nowPlaying.currentTime==null) return;
+  const elapsedSinceSync = nowPlaying.playing ? Math.floor((Date.now()-nowPlaying.lastSyncMs)/1000) : 0;
+  const estimatedCurrent = nowPlaying.currentTime + elapsedSinceSync;
+  sendSeek(targetSec - estimatedCurrent);
+}
+
+let eqSupported=null; // null = not yet determined, true/false once we know
+function parseEq(d){
+  eqSupported=true; markEqSupport();
+  const dynamic=(d[0]&0x80)!==0, mode=d[0]&0x7F;
+  let vals;
+  if(dynamic){ const n=d[1]; vals=d.slice(2,2+n).map(s8); }
+  else vals=d.slice(1,11).map(s8);
+  eq.dynamic=dynamic; eq.mode=mode;
+  if(vals.length && vals.length!==eq.n){ eq.n=vals.length; buildEq(); }
+  if(vals.length) eq.vals=vals;
+  $('eq-mode').value=String(mode);
+  renderEqValues();
+}
+function parseEqPreset(d){
+  eqSupported=true; markEqSupport();
+  const n=d[0]; if(!n) return;
+  const freqs=[]; let i=1;
+  for(let k=0;k<n;k++){ freqs.push((d[i]<<8)|d[i+1]); i+=2; }
+  eq.freqs=freqs; if(eq.n!==n){ eq.n=n; eq.vals=Array(n).fill(0);} buildEq();
+  renderEqValues();
+}
+// Some Wuzhi SKUs don't implement EQ at all (the OEM app itself shows "This product does not
+// support EQ settings" as a toast on those units) — the device just never includes EQ/EQ_PRESET
+// attrs in its GET_SYS_INFO replies. We detect that at runtime rather than hardcoding it, since
+// it may differ by unit/firmware.
+function markEqSupport(){
+  const card=$('eq-card'), note=$('eq-note');
+  if(eqSupported===false){
+    $('eq-mode').disabled=true;
+    $('eq-bands').innerHTML='';
+    note.textContent="This device didn't return any EQ data when asked — it most likely doesn't support EQ (the OEM app shows the same \"not supported\" message on some Wuzhi units). Advanced tab still lets you probe it manually.";
+  } else if(eqSupported===true){
+    $('eq-mode').disabled=false;
+    note.textContent='Moving a slider switches to the Custom preset.';
+  }
+}
+
+// ---------- UI helpers ----------
+function setVolUI(v){ $('range-volume').value=v; $('vol-val').textContent=v; }
+function markMode(){ document.querySelectorAll('#mode-buttons button').forEach(b=>b.classList.toggle('sel', +b.dataset.mode===curMode)); updatePlaybackUI(); }
+
+// Per the OEM app's behavior as described: AUX only supports mute/unmute (no prev/next — the
+// device has nothing to skip on a line-in signal); BT and Sound Card don't accept transport
+// commands at all; USB drive (Music) and the others get the normal full transport row.
+function updatePlaybackUI(){
+  const prev=$('tr-prev'), play=$('tr-play'), next=$('tr-next');
+  if(curMode===3){ // AUX
+    prev.style.display='none'; next.style.display='none';
+    play.disabled=false; play.textContent='🔇 Mute/Unmute';
+  } else if(curMode===0 || curMode===19){ // BT / Sound Card
+    prev.style.display=''; next.style.display='';
+    prev.disabled=true; play.disabled=true; next.disabled=true;
+    play.textContent='⏯ Play/Pause';
+  } else { // USB drive (Music), FM, RTC
+    prev.style.display=''; next.style.display='';
+    prev.disabled=false; play.disabled=false; next.disabled=false;
+    play.textContent='⏯ Play/Pause';
+  }
+  // USB drive file browser only makes sense (and was only confirmed) for the Music/USB-drive input.
+  $('btn-files').disabled = curMode!==1;
+  if(curMode!==1) $('files-status').textContent='';
+  $('seek-row').style.display = curMode===1 ? 'block' : 'none';
+  updateNowPlayingUI();
+}
+
+// Confirmed from a real decompiled MusicPlayControlImpl.seekTo(): this is NOT an absolute seek —
+// it's CMD.FUNCTION (opcode 14) with fn=1 (Music) and sub-command 7 (fast-forward) or 6 (rewind),
+// carrying a big-endian uint16 magnitude in SECONDS (CommandBuilder.buildFastForwardCmd/
+// buildRetreatQuicklyCmd -> buildFunctionCmd((byte)1,(byte)7/6,shortToBigBytes(s))). The real app
+// also ignores anything under a 3-second jump (Math.abs(deltaMs) < 3000 -> no-op), mirrored here.
+// We don't have confirmed bytes for the track's current position/duration (the status push's
+// data[7] byte is logged elsewhere as an unconfirmed counter, not verified as elapsed seconds), so
+// this is implemented as what the protocol actually is: a relative jump, not a faked absolute
+// scrub bar — the slider snaps back to its center (0) after each use.
+function sendSeek(deltaSeconds){
+  if(curMode!==1){ log('Seek only applies to USB drive mode.'); return; }
+  const d=Math.round(deltaSeconds);
+  if(Math.abs(d)<3){ log('Seek of '+d+'s ignored (<3s), matching the OEM app\'s own minimum step.'); return; }
+  const mag=Math.min(Math.abs(d), 0x7FFF);
+  const bytes=[(mag>>8)&0xFF, mag&0xFF];
+  if(d<0) cmd(CMD.FUNCTION,[MUSIC_FN,6,...bytes],'Rewind '+mag+'s');
+  else cmd(CMD.FUNCTION,[MUSIC_FN,7,...bytes],'Fast-forward '+mag+'s');
+}
+
+function buildEq(){
+  const box=$('eq-bands'); box.innerHTML='';
+  for(let i=0;i<eq.n;i++){
+    const f=eq.freqs[i]; const label=f? (f>=1000 ? (f/1000)+'k' : f) : (i+1);
+    const d=document.createElement('div'); d.className='eqband';
+    d.innerHTML=`<span class="v" id="eqv${i}">0</span><input type="range" min="${EQ_MIN}" max="${EQ_MAX}" value="0" data-i="${i}"><span>${label}</span>`;
+    const inp=d.querySelector('input');
+    inp.addEventListener('input',e=>{ eq.vals[i]=+e.target.value; $('eqv'+i).textContent=e.target.value; });
+    inp.addEventListener('change',()=>scheduleCustomEq());
+    box.appendChild(d);
+  }
+}
+function renderEqValues(){
+  document.querySelectorAll('#eq-bands input').forEach((inp,i)=>{
+    const v=eq.vals[i]??0; inp.value=v; const l=$('eqv'+i); if(l) l.textContent=v;
+  });
+}
+let eqTimer=null;
+function scheduleCustomEq(){ clearTimeout(eqTimer); eqTimer=setTimeout(sendCustomEq,250); }
+async function sendCustomEq(){
+  const g=eq.vals.map(v=>v&0xFF);
+  const data = eq.dynamic ? [0x80|EQ_CUSTOM, g.length, ...g] : [EQ_CUSTOM, ...g.slice(0,10)];
+  eq.mode=EQ_CUSTOM; $('eq-mode').value=String(EQ_CUSTOM);
+  await cmd(CMD.SET_SYS_INFO,[FN_PUBLIC,...ltv(ATTR.EQ,data)],'Set custom EQ');
+}
+
+// ---------- Actions ----------
+async function refresh(){
+  // mask bits: battery(0) volume(1) eq(4) mode(6) eq-preset(12)
+  const mask=(1<<ATTR.BATTERY)|(1<<ATTR.VOLUME)|(1<<ATTR.EQ)|(1<<ATTR.MODE)|(1<<ATTR.EQ_PRESET);
+  await cmd(CMD.GET_SYS_INFO,[FN_PUBLIC,...u32(mask)],'Get public sys info');
+}
+// ---------- JieLi device auth (unframed 17-byte exchange) ----------
+// Protocol (matches Jieli-Tech's own Auth class in jl_auth_2.0.0.js):
+//   app    -> device : 00 + 16 random bytes                (app's challenge)
+//   device -> app    : 01 + jlAuthEncrypt(app's random)     (device proves it knows the key)
+//   app    -> device : 02 'p' 'a' 's' 's'                   (app accepts step above)
+//   device -> app    : 00 + 16 random bytes                (device's own challenge)
+//   app    -> device : 01 + jlAuthEncrypt(device's random)  (app proves it knows the key)
+//   device -> app    : 02 'p' 'a' 's' 's'                   (device accepts; session authenticated)
+// We don't actually need to verify the device's response to OUR challenge (the official app
+// does, but skipping it changes nothing we can act on); we just answer whatever the device
+// challenges us with, exactly like the real app does.
+let auth={passed:false,gotAny:false};
+const AUTH_PASS=[0x02,0x70,0x61,0x73,0x73]; // 'pass'
+function authPassBytes(b){ return b.length===5 && b[0]===2 && b[1]===0x70 && b[2]===0x61 && b[3]===0x73 && b[4]===0x73; }
+function handleAuthData(b){
+  auth.gotAny=true;
+  log("RX (unframed): "+hex(b));
+  if(b.length===17 && b[0]===0x00){
+    // Device is challenging us. Encrypt its random bytes with the link key and answer.
+    const challenge=Array.from(b.slice(1));
+    const resp=jlAuthEncrypt(challenge);
+    log("AUTH: device challenged us ("+hex(challenge)+") — answering with "+hex(resp));
+    writeRaw(resp).catch(e=>log("TX error: "+e.message));
+  } else if(b.length===17 && b[0]===0x01){
+    // Device answered our challenge. We accept unconditionally (matches the official app's flow).
+    log("AUTH: device answered our challenge — accepting.");
+    writeRaw(Uint8Array.from(AUTH_PASS)).catch(e=>log("TX error: "+e.message));
+  } else if(authPassBytes(b)){
+    auth.passed=true; log("✔ Device auth passed"); hideAuthBanner();
+  } else {
+    log("AUTH: unrecognized unframed message, ignoring.");
+  }
+}
+function showAuthBanner(msg){ const el=$('auth-banner'); el.textContent='⚠ '+msg; el.style.display='block'; }
+function hideAuthBanner(){ $('auth-banner').style.display='none'; }
+async function startSession(){
+  hideAuthBanner();
+  if($('chk-auth').checked){
+    const r=Array.from(crypto.getRandomValues(new Uint8Array(16)));
+    auth={passed:false,gotAny:false};
+    log("TX auth probe: 00 + 16 random bytes");
+    await writeRaw(Uint8Array.from([0,...r])).catch(e=>log("TX error: "+e.message));
+    // Give the full (possibly two-way) handshake a few seconds to settle before issuing commands.
+    for(let i=0;i<20 && !auth.passed;i++) await new Promise(res=>setTimeout(res,250));
+    if(!auth.gotAny) log("No reply to auth probe — device completely silent (try 'Write with response', or the notify subscription is not delivering).");
+    else if(!auth.passed) showAuthBanner("Auth handshake did not complete (see log). Commands below may still be ignored by the device.");
+  }
+  await handshake();
+}
+
+async function handshake(){
+  await cmd(CMD.GET_TARGET_INFO,[0xFF,0xFF,0xFF,0xFF,PLATFORM],'Get target info');
+  await refresh();
+  if(eqSupported===null){ eqSupported=false; markEqSupport(); log("EQ: no EQ data came back for this device — marking as unsupported."); }
+  await customCmd(CUSTOM_SUB.PASSWORD_READ,[],'Read PIN auth state');
+  await customCmd(CUSTOM_SUB.BEEP_READ,[],'Read prompt chime state');
+  await customCmd(CUSTOM_SUB.INDICATOR_READ,[],'Read indicator level');
+}
+
+function transport(kind){
+  // function id = current mode (0 BT, 1 Music, 3 AUX, 4 FM); cmd ids from AttrAndFunCode
+  const fn=curMode;
+  // BT and Sound Card don't accept transport commands (the buttons are disabled for these modes
+  // in the UI already — updatePlaybackUI() — this is just a backstop). 19 is our own made-up
+  // Sound Card id, not a real device function id, so it must never reach CMD_FUNCTION either way.
+  if(fn===0 || fn===19){ log("Playback controls aren't functional on this input."); return; }
+  let c;
+  if(fn===4) c={prev:4,play:1,next:5}[kind];       // FM: prev/next channel
+  else if(fn===3) c={play:1}[kind];                // AUX: mute/unmute only
+  else c={play:1,prev:2,next:3}[kind];             // Music (USB drive)
+  if(c==null){ log("Not available in this mode"); return; }
+  cmd(CMD.FUNCTION,[fn,c],'Transport '+kind);
+}
+
+function onDisc(){
+  $('status-text').textContent='Disconnected'; $('status-dot').classList.remove('on');
+  $('btn-connect').textContent='Connect via BLE'; $('controls').classList.add('disabled');
+  $('btn-refresh').disabled=true;
+  pending.forEach(p=>clearTimeout(p.t)); pending.clear(); rx=[]; wChar=nChar=null;
+  eqSupported=null; // re-probe EQ support fresh on the next connection, in case it's a different unit
+  soundCardActive=false; nowPlaying={title:null,playing:false,hasData:false,cluster:null,currentTime:null,totalTime:null,lastSyncMs:0};
+  fileBrowse={path:[0], entries:[], loading:false}; $('files-status').innerHTML='';
+  $('now-playing').style.display='none'; $('scrub-row').style.display='none';
+  hideAuthBanner();
+  log("Device disconnected.");
+}
+
+async function connect(){
+  if(dev && dev.gatt.connected){ dev.gatt.disconnect(); return; }
+  try{
+    log("Scanning…");
+    const prefix=$('input-prefix').value.trim();
+    const opts={optionalServices:PROFILES.map(p=>p.svc)};
+    if(prefix){
+      opts.filters=[{namePrefix:prefix},{namePrefix:prefix.toLowerCase()},{namePrefix:prefix.toUpperCase()},{services:[PROFILES[0].svc]},{services:[PROFILES[1].svc]}];
+    } else opts.acceptAllDevices=true;
+    dev=await navigator.bluetooth.requestDevice(opts);
+    dev.addEventListener('gattserverdisconnected',onDisc);
+    log("Connecting to "+(dev.name||dev.id)+"…");
+    const server=await dev.gatt.connect();
+    let found=false;
+    for(const p of PROFILES){
+      try{
+        const svc=await server.getPrimaryService(p.svc);
+        wChar=await svc.getCharacteristic(p.w);
+        nChar=await svc.getCharacteristic(p.n);
+        log("Using service "+p.svc.slice(4,8).toUpperCase()); found=true; break;
+      }catch(e){}
+    }
+    if(!found) throw new Error("No JieLi RCSP service (AE00 / FD00) found on this device");
+    const pr=o=>Object.entries(o.properties).filter(([k,v])=>v).map(([k])=>k).join(',');
+    log("write char props: "+pr(wChar)+" | notify char props: "+pr(nChar));
+    nChar.addEventListener('characteristicvaluechanged',onNotify);
+    await nChar.startNotifications();
+    $('status-text').textContent='Connected'; $('status-dot').classList.add('on');
+    $('btn-connect').textContent='Disconnect'; $('controls').classList.remove('disabled');
+    $('btn-refresh').disabled=false;
+    $('dev-info').textContent=dev.name||'';
+    // Pre-fill the rename field with the device's current Bluetooth name (the name we just
+    // connected to is the most reliable source — GET_TARGET_INFO's attrs don't reliably include
+    // it on every unit, so we don't depend on that parse for this).
+    if(dev.name) $('input-name').value=dev.name;
+    setTimeout(startSession,600);
+  }catch(e){ log("Connection failed: "+e.message); }
+}
+
+// ---------- Wiring ----------
+$('btn-connect').onclick=connect;
+$('btn-refresh').onclick=refresh;
+$('tr-prev').onclick=()=>transport('prev');
+$('tr-play').onclick=()=>transport('play');
+$('tr-next').onclick=()=>transport('next');
+$('btn-files').onclick=()=>browseUsbRoot();
+
+const scrubBar=$('range-scrub');
+scrubBar.addEventListener('pointerdown',()=>{ scrubDragging=true; });
+scrubBar.addEventListener('input',e=>{ $('scrub-cur').textContent=fmtTime(+e.target.value); });
+scrubBar.addEventListener('change',e=>{
+  scrubTo(+e.target.value);
+  scrubDragging=false;
+});
+scrubBar.addEventListener('pointerup',()=>{ scrubDragging=false; });
+
+const rsk=$('range-seek');
+rsk.addEventListener('input',e=>{ const v=+e.target.value; $('seek-label').textContent=(v>0?'+':'')+v+'s'; });
+rsk.addEventListener('change',e=>{
+  const v=+e.target.value;
+  sendSeek(v);
+  rsk.value=0; $('seek-label').textContent='0s';
+});
+
+const rv=$('range-volume');
+rv.addEventListener('input',e=>{ $('vol-val').textContent=e.target.value; });
+rv.addEventListener('change',e=>{
+  const v=+e.target.value;
+  cmd(CMD.SET_SYS_INFO,[FN_PUBLIC,...ltv(ATTR.VOLUME,[v])],'Set volume '+v);
+});
+
+// Real mode-select params for CUSTOM sub-command 8, confirmed from a decompiled
+// MultimediaFragment.java: sendBluetoothCommend()=1, sendUSBCommend()=2, sendAUXCommend()=3,
+// sendSoundCardCommend()=4 — this is what the OEM app's input-mode buttons actually send, for all
+// four inputs (not just Sound Card), and it's confirmed working for all four across several real
+// captures. Its status push (CUSTOM_SUB.MODE_SELECT in parseCustom) turned out NOT to carry
+// per-mode info though — it reads the same regardless of target mode — so detection still comes
+// from ATTR.MODE for BT/AUX/USB drive, and from the optimistic soundCardActive flag for Sound
+// Card specifically (see below).
+const MODE_SELECT_PARAM = {0:1, 1:2, 3:3, 19:4}; // BT, USB drive, AUX, Sound Card
+document.querySelectorAll('#mode-buttons button').forEach(b=>b.onclick=()=>{
+  const m=+b.dataset.mode;
+  const p=MODE_SELECT_PARAM[m];
+  if(p!=null){
+    if(m===19){
+      // The device gives no ongoing confirmation that Sound Card is actually selected — ATTR.MODE
+      // keeps reporting "BT" the whole time it's playing (confirmed across 5 separate switches in
+      // a real capture). Per how the OEM app itself behaves: it highlights the button optimistically
+      // on click, and only reverts if the switch itself fails (no computer plugged into the USB
+      // port) — it doesn't continuously poll a "current source" status either. We don't yet have a
+      // captured log of that failure case to know what it looks like on the wire, so this
+      // implements the optimistic half only: it'll stay highlighted until a different input is
+      // picked, even if the switch silently didn't take because nothing's plugged in.
+      soundCardActive=true; curMode=19; markMode();
+    } else {
+      soundCardActive=false; // leaving Sound Card — let ATTR.MODE drive the highlight again
+    }
+    customCmd(CUSTOM_SUB.MODE_SELECT,[p],'Switch mode to '+MODE_NAMES[m]).then(()=>setTimeout(refresh,600));
+    return;
+  }
+  soundCardActive=false;
+  // Fallback for any mode without a known MODE_SELECT param (e.g. FM): SYS_INFO attr 6
+  // (ATTR.MODE) is READ-ONLY status; writing it just gets ACKed without changing anything
+  // (confirmed from a real device log). The actual switch is CMD_FUNCTION (opcode 14) with the
+  // "meta" function selector 0xFF and the target mode as the sub-code — see CommandBuilder.java's
+  // buildSwitchBtModeCmd/buildSwitchLineInModeCmd/buildSwitchFMModeCmd etc., which all resolve to
+  // buildFunctionCmd((byte)-1, targetMode, null).
+  cmd(CMD.FUNCTION,[0xFF,m],'Switch mode to '+MODE_NAMES[m]).then(()=>setTimeout(refresh,600));
+});
+
+EQ_NAMES.forEach((n,i)=>{ const o=document.createElement('option'); o.value=i; o.textContent=n; $('eq-mode').appendChild(o); });
+buildEq();
+$('eq-mode').onchange=e=>{
+  const m=+e.target.value;
+  if(m===EQ_CUSTOM){ sendCustomEq(); return; }
+  cmd(CMD.SET_SYS_INFO,[FN_PUBLIC,...ltv(ATTR.EQ,[m])],'Set EQ preset '+EQ_NAMES[m]).then(()=>setTimeout(refresh,300));
+};
+
+async function setDeviceName(immediate){
+  const v=$('input-name').value.trim(); if(!v) return;
+  const bytes=Array.from(new TextEncoder().encode(v)).slice(0,30);
+  const r=await cmd(CMD.ADV_SETTINGS,ltv(ADV_DEVICE_NAME,bytes),'Set name "'+v+'"'+(immediate?' (will reboot)':' (next boot)'));
+  if(immediate && r && r.status===0){
+    await cmd(CMD.REBOOT,[DEVICE_REBOOT],'Reboot device to apply name');
+  }
+}
+$('btn-name-now').onclick=()=>setDeviceName(true);
+$('btn-name-later').onclick=()=>setDeviceName(false);
+
+$('chk-pin-auth').onchange=e=>{ pinAuthState.enabled=e.target.checked; sendPinAuth(); };
+$('btn-pin').onclick=()=>sendPinAuth();
+
+const rc=$('range-chime');
+rc.addEventListener('input',e=>{ $('chime-val').textContent=e.target.value; });
+rc.addEventListener('change',e=>{ chimeState.vol=+e.target.value; sendChime(); });
+$('chk-chime').onchange=e=>{ chimeState.enabled=e.target.checked; sendChime(); };
+
+const ri=$('range-indicator');
+ri.addEventListener('input',e=>{ $('indicator-val').textContent=e.target.value; });
+ri.addEventListener('change',e=>{ customCmd(CUSTOM_SUB.INDICATOR,[+e.target.value],'Set indicator '+e.target.value); });
+
+$('btn-check-auth').onclick=()=>{ $('auth-check-result').textContent='checking…'; customCmd(CUSTOM_SUB.CHECK_AUTHENTIC,[],'Check authenticity'); };
+
+$('btn-raw').onclick=()=>{
+  const clean=s=>s.replace(/[^0-9a-fA-F]/g,'');
+  const op=parseInt(clean($('raw-op').value),16);
+  const ph=clean($('raw-params').value);
+  if(isNaN(op)){ log("Enter an opcode in hex"); return; }
+  const params=(ph.match(/../g)||[]).map(h=>parseInt(h,16));
+  cmd(op,params,'RAW op 0x'+op.toString(16));
+};
+
+$('btn-copylog').onclick=()=>navigator.clipboard.writeText($('log').textContent).then(()=>log("Log copied."));
+$('btn-clearlog').onclick=()=>{ $('log').textContent="> cleared"; };
+
+if(!navigator.bluetooth) log("Web Bluetooth is not available in this browser. Use Chrome or Edge (desktop/Android).");
+</script>
+</body>
+</html>
