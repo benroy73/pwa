@@ -150,6 +150,30 @@
         }
         .legend-item { display: flex; align-items: center; gap: 8px; transition: opacity 0.2s; }
         .legend-item.inactive { opacity: 0.4; }
+        .nvs-panel {
+            display: none;
+            margin-top: 14px;
+            padding: 12px;
+            background: #09090b;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+        .nvs-panel.open { display: block; }
+        .nvs-value {
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            font-size: 18px;
+            color: #fff;
+            margin: 6px 0 10px;
+            word-break: break-all;
+            user-select: all;
+            -webkit-user-select: all;
+        }
+        .nvs-bands { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; margin-bottom: 10px; }
+        .nvs-band { background: #18181c; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; text-align: center; }
+        .nvs-band b { display: block; color: #fff; font-size: 14px; }
+        .nvs-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); height: 36px; }
         .event-log { margin-top: 15px; font-size: 12px; color: var(--text-muted); }
         .event-log summary {
             cursor: pointer;
@@ -299,9 +323,29 @@
                     <option value="12">1/12 Octave (Light)</option>
                 </select>
             </div>
+            <div class="form-group" style="max-width: 300px;">
+                <label>Export Contents</label>
+                <select id="exportMode">
+                    <option value="response" selected>Response to flatten (source - target)</option>
+                    <option value="correction">Correction curve (target - source)</option>
+                </select>
+            </div>
             <button class="btn btn-success" id="btnExportREW" disabled style="padding: 0 20px;">
                 Export REW File (.txt)
             </button>
+            <button class="btn btn-secondary" id="btnShowNvs" disabled>Show Squeezelite NVS EQ</button>
+            <label class="nvs-check">
+                <input type="checkbox" id="nvsCutOnly" checked> Cut only (avoid clipping)
+            </label>
+        </div>
+        <div class="nvs-panel" id="nvsPanel">
+            <div>Squeezelite-ESP32 NVS <b>equalizer</b> value (10 bands, dB, 31 Hz to 16 kHz):</div>
+            <div class="nvs-value" id="nvsValue"></div>
+            <div class="nvs-bands" id="nvsBands"></div>
+            <div class="step-controls">
+                <button class="btn btn-secondary" id="btnCopyNvs">Copy value</button>
+            </div>
+            <p id="nvsNote" style="margin: 10px 0 0; font-size: 12px;"></p>
         </div>
     </div>
 
@@ -320,7 +364,7 @@
             </div>
             <div class="legend-item" id="legendLive">
                 <span class="legend-swatch" style="border-top-color:#10b981; border-top-width:2px;"></span>
-                <span>Microphone recording (peak hold)</span>
+                <span>Microphone recording (peak hold, level-matched like the saved profile)</span>
             </div>
         </div>
     </div>
@@ -405,6 +449,7 @@
     const targetFileInput = document.getElementById('targetFileInput');
 
     const btnExportREW = document.getElementById('btnExportREW');
+    const btnShowNvs = document.getElementById('btnShowNvs');
 
     window.addEventListener('load', () => {
         const savedSource = localStorage.getItem('esp32_source_profile');
@@ -448,11 +493,14 @@
             srcBadge.classList.add('badge-active');
             btnExportSourceJson.disabled = false;
             btnExportREW.disabled = false;
+            btnShowNvs.disabled = false;
         } else {
             srcBadge.innerText = "No Data";
             srcBadge.classList.remove('badge-active');
             btnExportSourceJson.disabled = true;
             btnExportREW.disabled = true;
+            btnShowNvs.disabled = true;
+            document.getElementById('nvsPanel').classList.remove('open');
         }
 
         const tgtBadge = document.getElementById('targetBadge');
@@ -787,18 +835,29 @@
         }
     }
 
+    // Level-matches the recording to the 500 Hz - 2 kHz average and limits it to +/-24 dB.
+    // The chart preview and the saved profile both use this, so what you see is what gets saved.
+    // Returns null while nothing audible has been captured.
+    function getNormalizedRecording() {
+        if (!activeSpectrum.some(v => v > -99)) return null;
+        const midIndices = FREQUENCIES.map((f, i) => (f >= 500 && f <= 2000) ? i : -1).filter(i => i !== -1);
+        const midAvg = midIndices.reduce((acc, idx) => acc + activeSpectrum[idx], 0) / (midIndices.length || 1);
+        return FREQUENCIES.map((f, i) => ({
+            f: f,
+            v: Math.max(-24, Math.min(24, activeSpectrum[i] - midAvg))
+        }));
+    }
+
     function saveActiveSpectrum(type) {
         if (!hasRecording) {
             statusMsg.innerText = "Status: Nothing recorded yet. Start the microphone first.";
             return;
         }
-        const midIndices = FREQUENCIES.map((f, i) => (f >= 500 && f <= 2000) ? i : -1).filter(i => i !== -1);
-        const midAvg = midIndices.reduce((acc, idx) => acc + activeSpectrum[idx], 0) / (midIndices.length || 1);
-
-        const normalized = FREQUENCIES.map((f, i) => ({
-            f: f,
-            v: Math.max(-24, Math.min(24, activeSpectrum[i] - midAvg))
-        }));
+        const normalized = getNormalizedRecording();
+        if (!normalized) {
+            statusMsg.innerText = "Status: No sound captured yet. Play a sweep with the microphone on first.";
+            return;
+        }
 
         if (type === 'source') {
             sourceProfile = normalized;
@@ -876,9 +935,10 @@
 
         // Microphone recording (Green) - kept on screen after the mic stops
         if (hasRecording) {
-            const liveData = FREQUENCIES.map((f, i) => ({ f, v: activeSpectrum[i] + 50 }));
-            const smoothedLive = applyOctaveSmoothing(liveData, smoothingValue);
-            drawCurve(smoothedLive, '#10b981', 1);
+            const liveData = getNormalizedRecording();
+            if (liveData) {
+                drawCurve(applyOctaveSmoothing(liveData, smoothingValue), '#10b981', 1.5);
+            }
         }
     }
 
@@ -1011,16 +1071,19 @@
         const smoothedSource = applyOctaveSmoothing(sourceProfile, smoothingValue);
         const smoothedTarget = applyOctaveSmoothing(targetCurve, smoothingValue);
 
+        const exportMode = document.getElementById('exportMode').value;
+
         let exportLines = [
             "* Frequency Response Data Export for Louder-ESP32 / AirPlay-ESP32",
             `* Octave Smoothing applied: ${smoothingValue > 0 ? '1/' + smoothingValue : 'None'}`,
+            `* Contents: ${exportMode === 'response' ? 'response to flatten (source - target)' : 'correction curve (target - source)'}`,
             "* Freq(Hz) dB Phase(deg)"
         ];
 
         FREQUENCIES.forEach((f, i) => {
             const targetDb = smoothedTarget[i].v;
             const sourceDb = smoothedSource[i].v;
-            const deltaDb = (targetDb - sourceDb).toFixed(2);
+            const deltaDb = (exportMode === 'response' ? sourceDb - targetDb : targetDb - sourceDb).toFixed(2);
             exportLines.push(`${f.toFixed(2)} ${deltaDb} 0.0`);
         });
 
@@ -1028,13 +1091,98 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `esp32_correction_${activePreset}.txt`;
+        a.download = `esp32_${exportMode}_${activePreset}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        statusMsg.innerText = "Status: REW file exported successfully. Upload this text file to your firmware Web UI.";
+        statusMsg.innerText = exportMode === 'response'
+            ? "Status: Exported. In the firmware Web UI choose 'Fit to a measurement...' and load this file."
+            : "Status: Exported the correction curve.";
+    });
+
+    // ---- Squeezelite-ESP32 NVS equalizer values ----
+    const NVS_BANDS = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const NVS_LIMIT_DB = 13;   // assumed +/-13 dB per band (ESP-ADF's default band gain is -13 dB)
+    let nvsText = '';
+
+    function computeNvsValues() {
+        if (!sourceProfile) return null;
+        const activePreset = targetSelect.value;
+        const targetCurve = activePreset === 'custom' ? customTargetProfile : getPresetTargetCurve(activePreset);
+        if (!targetCurve) {
+            alert("Please select or record a target profile.");
+            return null;
+        }
+        if (sourceProfile.length !== FREQUENCIES.length || targetCurve.length !== FREQUENCIES.length) {
+            alert("Profile size doesn't match the expected " + FREQUENCIES.length + " points. Re-record or re-import the profile.");
+            return null;
+        }
+
+        const smoothingValue = parseInt(smoothingSelect.value);
+        const src = applyOctaveSmoothing(sourceProfile, smoothingValue);
+        const tgt = applyOctaveSmoothing(targetCurve, smoothingValue);
+
+        // Correction (target - source), averaged over one octave centred on each band
+        const raw = NVS_BANDS.map(center => {
+            const lo = center / Math.SQRT2;
+            const hi = center * Math.SQRT2;
+            let sum = 0, n = 0;
+            FREQUENCIES.forEach((f, i) => {
+                if (f >= lo && f <= hi) { sum += tgt[i].v - src[i].v; n++; }
+            });
+            return n ? sum / n : 0;
+        });
+
+        let shift = 0;
+        if (document.getElementById('nvsCutOnly').checked) {
+            const peak = Math.max(...raw);
+            if (peak > 0) shift = -peak;   // slide everything down so no band boosts
+        }
+
+        const values = raw.map(v => {
+            const r = Math.round(v + shift);
+            return Math.max(-NVS_LIMIT_DB, Math.min(NVS_LIMIT_DB, r)) + 0;   // "+ 0" turns -0 into 0
+        });
+        return { values, shift };
+    }
+
+    function showNvsValues() {
+        const result = computeNvsValues();
+        if (!result) return;
+        nvsText = result.values.join(',');
+
+        document.getElementById('nvsValue').innerText = nvsText;
+        document.getElementById('nvsBands').innerHTML = NVS_BANDS.map((f, i) =>
+            '<div class="nvs-band">' + (f >= 1000 ? (f / 1000) + ' kHz' : f + ' Hz') +
+            '<b>' + (result.values[i] > 0 ? '+' : '') + result.values[i] + ' dB</b></div>'
+        ).join('');
+
+        let note = 'Paste into the NVS "equalizer" parameter. The values are whole dB, one per band.';
+        if (result.shift < 0) note += ' All bands were lowered by ' + (-result.shift).toFixed(1) + ' dB so none boost; turn the player volume up to compensate.';
+        note += ' Bands outside the range your sweep actually covered (often 31 Hz and 16 kHz) reflect room noise, so treat them with caution.';
+        document.getElementById('nvsNote').innerText = note;
+
+        document.getElementById('nvsPanel').classList.add('open');
+        logEvent('NVS equalizer values: ' + nvsText);
+        statusMsg.innerText = "Status: Squeezelite NVS equalizer values calculated.";
+    }
+
+    btnShowNvs.addEventListener('click', showNvsValues);
+    // Keep an open panel in step with the settings it was calculated from
+    [document.getElementById('nvsCutOnly'), targetSelect, smoothingSelect].forEach(el =>
+        el.addEventListener('change', () => {
+            if (document.getElementById('nvsPanel').classList.contains('open')) showNvsValues();
+        })
+    );
+    document.getElementById('btnCopyNvs').addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(nvsText);
+            statusMsg.innerText = "Status: NVS equalizer value copied to clipboard.";
+        } catch (e) {
+            statusMsg.innerText = "Status: Could not copy automatically - select the value above and copy it manually.";
+        }
     });
 
     // ---- Diagnostics: page lifecycle + log buttons ----
