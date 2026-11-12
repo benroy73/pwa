@@ -17,14 +17,18 @@ In most browsers there is an option to "Install page as an app..." which gives y
 
 - Use a laptop as an external monitor with a cheap USB HDMI capture card.
 
-### [Speaker box designer](./speaker-box-designer/sealed-speaker-box-3d-design.html)
+### Speaker Tools
 
-- Design a sealed speaker and calculate the internal volume to match a speaker driver.
+#### [Sealed speaker box designer](./speaker-box-designer/sealed-speaker-box-3d-design.html)
+- Build a sealed speaker box.
 
-### [DSP EQ Room Correction](./dsp-eq-room-correction/dsp-eq-room-correction.html)
+#### [Ported speaker box designer](./speaker-box-designer/ported-speakerbox-designer.html)
+- Build a ported speaker box.
 
+#### [Speaker DSP EQ Room Correction](./dsp-eq-room-correction/dsp-eq-room-correction.html)
 - Use a high quality USB microphone to calculate DSP EQ setting for a ESP32 speaker.
 
-### [Wuzhi BT Amp](./wuzhi-bt-amp/wuzhi_ble_controller.html)
+#### [Wuzhi BT Amp](./wuzhi-bt-amp/wuzhi_ble_controller.html)
 
 - Setup and control a Wuzhi JieLi Bluetooth Amplifier.
+

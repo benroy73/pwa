@@ -1,0 +1,1543 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>🔊 Speaker Box Designer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: full-height workbench. 3D stage on the left, drafting-sheet controls on the right.
+   On phones the stage sticks to the top so the model stays visible while values change. */
+
+/* ---------- Colour and type tokens (light, then dark for system and for the explicit toggle) ---------- */
+:root{
+  --bg:#e7eaea; --panel:#f4f6f6; --ink:#172225; --muted:#53686d; --line:#c9d3d4;
+  --accent:#0d6a7c; --accent-ink:#ffffff; --stage:#dce2e2; --field:#ffffff; --chip:#e1e8e8;
+  --warn:#a14a06; --ok:#2a7849; --shadow:rgba(20,40,44,.18);
+  --sheet:#ecdfc6; --sheet-line:#b39a6c; --pa:#cfe5ea; --pb:#d6e7cd; --pc:#f3dcb4;
+  --f-display:'Barlow Semi Condensed','Arial Narrow',system-ui,sans-serif;
+  --f-body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1517; --panel:#172023; --ink:#e4ebec; --muted:#8fa2a6; --line:#2a373b;
+    --accent:#4cc0d6; --accent-ink:#06191d; --stage:#0c1214; --field:#1d292d; --chip:#223034;
+    --warn:#f0a35e; --ok:#6fcf97; --shadow:rgba(0,0,0,.5); color-scheme:dark;
+    --sheet:#2b271f; --sheet-line:#5d503a; --pa:#21505b; --pb:#30543a; --pc:#6b5128;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1517; --panel:#172023; --ink:#e4ebec; --muted:#8fa2a6; --line:#2a373b;
+  --accent:#4cc0d6; --accent-ink:#06191d; --stage:#0c1214; --field:#1d292d; --chip:#223034;
+  --warn:#f0a35e; --ok:#6fcf97; --shadow:rgba(0,0,0,.5); color-scheme:dark;
+  --sheet:#2b271f; --sheet-line:#5d503a; --pa:#21505b; --pb:#30543a; --pc:#6b5128;
+}
+
+/* ---------- Page frame ---------- */
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.45;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--stage)}
+*{box-sizing:border-box}
+button,input,select{font:inherit;color:inherit}
+
+/* ---------- 3D stage ---------- */
+#app{display:grid;grid-template-columns:minmax(0,1fr) 410px;height:100%}
+#stage{position:relative;background:var(--stage);min-height:320px;overflow:hidden;min-width:0}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#glmsg[hidden]{display:none}
+#glmsg{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
+.dim{position:absolute;left:0;top:0;pointer-events:none;font:500 12px/1 var(--f-mono);color:var(--accent);background:var(--stage);padding:3px 6px;border:1px solid var(--accent);border-radius:3px;white-space:nowrap;transform:translate(-50%,-50%)}
+.hint-top{position:absolute;top:12px;left:max(14px,env(safe-area-inset-left,0px));font:500 12px var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);pointer-events:none}
+.view-tools{position:absolute;left:max(12px,env(safe-area-inset-left,0px));bottom:max(12px,env(safe-area-inset-bottom,0px));display:flex;gap:6px;flex-wrap:wrap;max-width:calc(100% - 24px)}
+.tool{border:1px solid var(--line);background:var(--panel);border-radius:6px;padding:7px 11px;font:600 13px var(--f-display);letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.tool[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tool:focus-visible,.chip:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- Control panel: headings, results, form rows ---------- */
+#panel{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;min-width:0;
+  padding-block:20px 40px;padding-left:max(18px,env(safe-area-inset-left,0px));padding-right:max(18px,env(safe-area-inset-right,0px))}
+h1{font:700 26px/1.05 var(--f-display);letter-spacing:.01em;margin:0}
+.sub{color:var(--muted);margin:6px 0 0;font-size:14px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:6px 12px;font:600 13px var(--f-display);letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+
+section{margin-top:22px;padding-top:16px;border-top:1px solid var(--line)}
+h2{font:600 13px var(--f-display);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 12px}
+
+.result{display:grid;gap:14px}
+.big{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.big .v{font:500 40px/1 var(--f-mono);letter-spacing:-.02em}
+.big .u{font:600 16px var(--f-display);color:var(--muted);letter-spacing:.05em}
+.pill{font:600 12px var(--f-display);letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:999px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)}
+dl{margin:0;display:grid;grid-template-columns:1fr auto;gap:7px 14px}
+dt{color:var(--muted)} dd{margin:0;font:500 14px var(--f-mono);text-align:right;font-variant-numeric:tabular-nums}
+
+.row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:4px 10px;margin-bottom:14px}
+.row label{font-weight:500}
+.inp{display:flex;align-items:center;gap:6px}
+.inp input{width:92px;text-align:right;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:500 14px var(--f-mono);font-variant-numeric:tabular-nums}
+.inp .u{width:22px;color:var(--muted);font:500 13px var(--f-mono)}
+.row input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent);margin:2px 0 0}
+.row .alt{grid-column:1/-1;margin-top:-2px;color:var(--muted);font:400 12px var(--f-mono);text-align:right}
+select{background:var(--field);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:-4px 0 14px}
+.chip{border:1px solid var(--line);background:var(--chip);border-radius:999px;padding:4px 11px;font:500 13px var(--f-mono);cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn{border:1px solid var(--accent);background:transparent;color:var(--accent);border-radius:6px;padding:7px 12px;font:600 13px var(--f-display);letter-spacing:.05em;text-transform:uppercase;cursor:pointer}
+.btn:hover{background:var(--accent);color:var(--accent-ink)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.note{color:var(--muted);font-size:13px;margin:0 0 10px}
+.note b{font-family:var(--f-mono);font-weight:500;color:var(--ink)}
+
+/* ---------- Cut list table and fit checks ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:600 12px var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 0 6px}
+td{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}
+td.n,th.n{text-align:right;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+td.q{font-family:var(--f-mono);color:var(--muted);width:34px}
+.tablewrap{overflow-x:auto}
+
+ul.checks{list-style:none;padding:0;margin:0;display:grid;gap:8px}
+ul.checks li{display:grid;grid-template-columns:18px 1fr;gap:8px;font-size:14px}
+ul.checks .m{font:700 14px var(--f-mono)}
+ul.checks .ok .m{color:var(--ok)} ul.checks .warn .m{color:var(--warn)} ul.checks .warn{color:var(--ink)}
+.foot{margin-top:24px;color:var(--muted);font-size:13px}
+.foot code{font-family:var(--f-mono);font-size:12px}
+
+/* ---------- Sheet layout drawing (SVG classes) and band plan ---------- */
+.row input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);margin:0}
+.row .lab{font-weight:500}
+.row.stack{grid-template-columns:1fr}
+.seg.wide{display:flex;width:100%}
+.seg.wide button{flex:1}
+.sheet-fig svg{display:block;margin:0 auto 14px;width:100%;height:auto}
+.sv-sheet{fill:var(--sheet);stroke:var(--sheet-line);stroke-width:1}
+.sv-part{stroke:var(--ink);stroke-opacity:.5;stroke-width:.8}
+.sv-p0{fill:var(--pa)} .sv-p1{fill:var(--pb)} .sv-p2{fill:var(--pc)}
+.sv-pB{fill-opacity:.55}
+.sv-rem{stroke:var(--accent);stroke-width:1.2;stroke-dasharray:5 3}
+.sv-hatch{stroke:var(--accent);stroke-width:1.1;opacity:.4}
+.sv-t{fill:var(--ink);font-family:var(--f-mono);font-weight:500}
+.sv-tr{fill:var(--accent);font-family:var(--f-mono);font-weight:500;paint-order:stroke;stroke:var(--sheet);stroke-width:3px;stroke-linejoin:round}
+ol.plan{margin:0 0 12px;padding-left:22px;display:grid;gap:7px;font-size:14px}
+ol.plan b{font-family:var(--f-display);letter-spacing:.04em}
+ol.plan .pp{display:block;font-family:var(--f-mono);font-size:13px;color:var(--muted);padding-left:12px;margin-top:2px}
+.warn-note{color:var(--warn)}
+
+/* ---------- Phone layout: stage on top and sticky, controls scroll underneath ---------- */
+@media (max-width:900px){
+  .hint-top{display:none}
+  .view-tools{top:10px;bottom:auto}
+  html,body{height:auto}
+  #app{display:block;height:auto}
+  #stage{position:sticky;top:env(safe-area-inset-top,0px);height:46vh;min-height:280px;z-index:5;border-bottom:1px solid var(--line)}
+  #panel{border-left:0;overflow:visible}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div id="app">
+  <!-- Left: 3D model with view tools and dimension labels -->
+  <div id="stage">
+    <canvas id="gl" aria-label="3D model of the speaker enclosure"></canvas>
+    <div id="glmsg" hidden>The 3D view needs WebGL, which this browser has not enabled. The numbers on the right still work.</div>
+    <div class="hint-top">Drag to orbit · scroll or pinch to zoom</div>
+    <div class="dim" id="dimW"></div><div class="dim" id="dimH"></div><div class="dim" id="dimD"></div>
+    <div class="view-tools">
+      <button class="tool" id="tgCut" aria-pressed="false" type="button">Cutaway</button>
+      <button class="tool" id="tgDim" aria-pressed="true" type="button">Dimensions</button>
+      <button class="tool" id="btnReset" type="button">Reset view</button>
+    </div>
+  </div>
+
+  <!-- Right: controls and results. Rows marked "built by script" are filled in from CONFIG. -->
+  <div id="panel">
+    <div class="top">
+      <div>
+        <h1>Speaker Box Designer</h1>
+        <p class="sub">Front-ported vented enclosure</p>
+      </div>
+      <div class="seg" role="group" aria-label="Units">
+        <button type="button" id="uIn" aria-pressed="true">in</button>
+        <button type="button" id="uMm" aria-pressed="false">mm</button>
+      </div>
+    </div>
+
+    <section aria-labelledby="h-res">
+      <h2 id="h-res">Results</h2>
+      <div class="result">
+        <div class="big"><span class="v" id="rNet">–</span><span class="u">L net air volume</span><span class="pill ok" id="rPill">on target</span></div>
+        <dl id="rList"></dl>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-ext">
+      <h2 id="h-ext">External size</h2>
+      <div id="fExt"></div> <!-- built by script -->
+      <div class="row">
+        <label for="selT">Wood thickness</label>
+        <select id="selT"></select> <!-- built by script -->
+      </div>
+      <div class="actions" id="presetBtns"></div> <!-- built by script -->
+      <p class="note">Sizes are outside dimensions. Front and back panels cover the full face, and the top, bottom and sides fit between them.</p>
+      <div class="row">
+        <label for="nTargetVol">Target volume</label>
+        <div class="inp"><input id="nTargetVol" type="number" step="0.05" inputmode="decimal"><span class="u">L</span></div>
+        <div class="alt" id="targetAlt"></div>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" id="btnFitDepth">Fit depth to target</button>
+      </div>
+      <p class="note">The net air volume is compared with the target. Fit depth changes only the box depth to reach it.</p>
+    </section>
+
+    <section aria-labelledby="h-port">
+      <h2 id="h-port">Port</h2>
+      <div class="chips" id="portChips" role="group" aria-label="Tube inside diameter in millimetres"></div> <!-- built by script -->
+      <div id="fPort"></div> <!-- built by script -->
+      <div class="actions">
+        <label for="nTargetFb" class="note" style="margin:0">Tune to</label>
+        <div class="inp"><input id="nTargetFb" type="number" step="1" inputmode="decimal"><span class="u">Hz</span></div>
+        <button class="btn" type="button" id="btnSetLen">Set length</button>
+      </div>
+      <p class="note" id="lenFor"></p>
+    </section>
+
+    <section aria-labelledby="h-drv">
+      <h2 id="h-drv">Driver and placement</h2>
+      <div id="fDrv"></div> <!-- built by script -->
+      <div class="row">
+        <label for="nDisp">Driver displacement (L)</label>
+        <div class="inp"><input id="nDisp" type="number" step="0.01" inputmode="decimal"><span class="u">L</span></div>
+      </div>
+      <div class="row">
+        <label for="nBrace">Bracing and damping (L)</label>
+        <div class="inp"><input id="nBrace" type="number" step="0.01" inputmode="decimal"><span class="u">L</span></div>
+      </div>
+      <p class="note">Check the cutout and frame size against your driver's own drawing.</p>
+    </section>
+
+    <section aria-labelledby="h-fin">
+      <h2 id="h-fin">Finish</h2>
+      <div class="chips" id="finChips" role="group" aria-label="Wood finish"></div> <!-- built by script -->
+    </section>
+
+    <section aria-labelledby="h-cut">
+      <h2 id="h-cut">Cut list</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Panel</th><th class="n">Qty</th><th class="n">Size</th></tr></thead>
+        <tbody id="cutBody"></tbody>
+      </table></div>
+      <p class="note" id="holes" style="margin-top:10px"></p>
+    </section>
+
+    <section aria-labelledby="h-sheet">
+      <h2 id="h-sheet">Sheet layout</h2>
+      <div class="chips" id="sheetChips" role="group" aria-label="Sheet size presets"></div> <!-- built by script -->
+      <div id="fSheet"></div> <!-- built by script -->
+      <div class="row">
+        <label for="cLock">Keep grain along the sheet length</label>
+        <input id="cLock" type="checkbox">
+      </div>
+      <div class="row">
+        <span class="lab" id="lblBoxes">Boxes from this sheet</span>
+        <div class="seg" role="group" aria-labelledby="lblBoxes">
+          <button type="button" id="bx1" aria-pressed="true">1</button>
+          <button type="button" id="bx2" aria-pressed="false">2</button>
+        </div>
+      </div>
+      <div class="row stack">
+        <span class="lab" id="lblMode">Keep uncut</span>
+        <div class="seg wide" role="group" aria-labelledby="lblMode">
+          <button type="button" data-mode="side" aria-pressed="true">One side</button>
+          <button type="button" data-mode="bottom" aria-pressed="false">Bottom</button>
+          <button type="button" data-mode="area" aria-pressed="false">Largest area</button>
+        </div>
+      </div>
+      <div class="sheet-fig" id="sheetFig"></div>
+      <dl id="sheetStats" style="margin-bottom:14px"></dl>
+      <ol class="plan" id="sheetPlan"></ol>
+      <p class="note" id="sheetNote"></p>
+    </section>
+
+    <section aria-labelledby="h-chk">
+      <h2 id="h-chk">Fit checks</h2>
+      <ul class="checks" id="checks"></ul>
+    </section>
+
+    <p class="foot" id="foot"></p> <!-- built by script -->
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* =====================================================================================================
+   SPEAKER BOX DESIGNER
+   One self-contained page. The script has three parts:
+     1. CONFIG       every default and tunable number. Edit this block to reuse the page for another driver.
+     2. CALCULATIONS pure functions with no DOM access: volume and port tuning, fit checks, formatting,
+                     and the sheet-layout packer.
+     3. INTERFACE    state, controls, results, the sheet drawing and the Three.js scene.
+   All lengths are stored in millimetres. Volumes are in litres. The in/mm toggle only changes display.
+   ===================================================================================================== */
+
+/* =====================================================================================================
+   1. CONFIG
+   ===================================================================================================== */
+const IN = 25.4;               // millimetres per inch
+const LITRES_PER_FT3 = 28.3168;
+
+const CONFIG = {
+  // Units shown at start: 'in' or 'mm'.
+  unit: 'in',
+
+  // ---- Starting box (outside size, mm) and the wood it is built from ----
+  box: { W: 6 * IN, H: 10 * IN, D: 7.75 * IN, wood: 14.2 },
+  // Entries in the wood thickness menu: thickness in mm and the label shown.
+  woodOptions: [
+    { mm: 6, label: '6 mm' }, { mm: 9, label: '9 mm' }, { mm: 12, label: '12 mm' },
+    { mm: 12.7, label: '½″ (12.7 mm)' }, { mm: 14.2, label: '9/16″ (14.2 mm)' }, { mm: 15, label: '15 mm' },
+    { mm: 15.875, label: '⅝″ (15.9 mm)' }, { mm: 18, label: '18 mm' }, { mm: 19.05, label: '¾″ (19.05 mm)' }
+  ],
+
+  // ---- Front baffle placement: distance from the top edge to each hole center (mm) ----
+  placement: { driverTop: 3 * IN, portTop: 7.75 * IN },
+
+  // ---- Port tube (mm) ----
+  port: {
+    id: 35,                    // inside diameter
+    length: 127,               // front face to the inner end of the tube
+    wall: 1.8,                 // tube wall thickness
+    flareLip: 12,              // how far the outside flare reaches past the bore (for the 3D model and fit checks)
+    idChoices: [26, 35, 37, 38, 40]  // quick-pick buttons for the tube inside diameter
+  },
+
+  // ---- Driver. Replace these with the values from your driver's data sheet. ----
+  driver: {
+    frame: 107,                // mounting flange diameter (mm)
+    magnet: 80,                // magnet diameter (mm)
+    depth: 102,                // depth behind the baffle (mm)
+    cutout: 92,                // baffle hole diameter (mm)
+    maxCutout: 100,            // largest cutout that still leaves flange to screw into (mm)
+    sd: 52.8,                  // effective piston area (cm²)
+    xmax: 2,                   // peak cone excursion (mm)
+    displacement: 0.37         // space the driver body takes up inside the box (litres)
+  },
+  bracing: 0.10,               // space taken by braces, cleats and damping (litres)
+
+  // ---- Targets and limits used by the results and fit checks ----
+  target: {
+    volume: 4.25,              // net air volume wanted (litres). 0.15 ft³ = 4.25 L
+    volumeTolerance: 3,        // percent either side that still counts as on target
+    tuning: 72,                // port tuning wanted (Hz)
+    tuningRange: [66, 80],     // tuning range that suits the driver (Hz)
+    maxPortSpeed: 8            // port air speed above this may chuff (m/s)
+  },
+  // Smallest gaps the fit checks accept (mm).
+  clearance: { baffleSide: 8, top: 6, portToDriver: 10, bottom: 6, magnet: 3 },
+
+  // ---- Physics ----
+  physics: {
+    speedOfSound: 34400,       // cm/s
+    endCorrection: 0.732       // port end correction, times the diameter, for one flared and one plain end
+  },
+  roundTo: 0.5,                // "Set length" and "Fit depth" round their answers to this step (mm)
+
+  // ---- Sheet layout ----
+  sheet: {
+    W: 12.25 * IN, H: 30.5 * IN,    // sheet size (mm)
+    kerf: IN / 8,              // saw kerf (mm)
+    lockGrain: false,          // keep each panel's long side along the sheet's long side
+    boxes: 1,                  // boxes cut from one sheet: 1 or 2
+    mode: 'side',              // what to leave uncut: 'side', 'bottom' or 'area'
+    // Quick-pick sizes, shown in the active unit.
+    presets: { in: [[12, 24], [24, 24], [24, 48], [48, 96]], mm: [[600, 600], [600, 1200], [1220, 2440]] },
+    drawing: { width: 360, maxHeight: 480 },  // size of the layout drawing (px, before it scales to fit)
+    debounceMs: 90             // wait after the last change before repacking
+  },
+
+  // ---- Starting look ----
+  finish: 'birch',
+  // Wood finishes. a and b are the light and dark grain colours, line is the colour of the fine grain
+  // lines (all RGB). rings sets how many growth rings show across a panel.
+  finishes: {
+    birch:  { name: 'Birch ply', a: [240, 218, 178], b: [214, 180, 132], line: [164, 126, 84], rings: 5 },
+    oak:    { name: 'White oak', a: [216, 184, 138], b: [168, 126, 80],  line: [110, 78, 46],  rings: 6 },
+    walnut: { name: 'Walnut',    a: [128, 90, 62],   b: [84, 55, 38],    line: [48, 29, 20],   rings: 6 },
+    black:  { name: 'Black ash', a: [58, 56, 54],    b: [34, 33, 32],    line: [14, 14, 14],   rings: 5 }
+  },
+  // 3D view.
+  view: {
+    cutaway: false,            // start with the right side removed
+    dimensions: true,          // start with dimension lines shown
+    fov: 32,                   // camera field of view (degrees)
+    startDirection: [0.85, 0.4, 1],  // camera direction at start and after "Reset view"
+    distanceFactor: 3.1,       // start distance as a multiple of the box's longest side
+    minDistance: 160, maxDistance: 1800,   // zoom limits (mm)
+    dimOffset: 26,             // gap between the box and its dimension lines (mm)
+    woodTileMm: 250,           // size of one repeat of the wood texture (mm)
+    woodTexturePx: 512         // resolution of the generated wood texture
+  },
+
+  // ---- Allowed range for each input, [min, max] in mm. Sliders use these ends. ----
+  limits: {
+    W: [110, 300], H: [150, 500], D: [100, 400],
+    portID: [20, 60], portLen: [30, 260], wall: [1, 6],
+    drvTop: [55, 300], portTop: [100, 460], cutout: [80, 104],
+    sheetW: [100, 3000], sheetH: [100, 3000], kerf: [0, 10]
+  },
+
+  // ---- Box presets. Each button sets these state values (same names as the S object in the interface). ----
+  presets: [
+    { label: 'Preset 6 × 10 × 7⅝″',
+      values: { W: 6 * IN, H: 10 * IN, D: 7.625 * IN, t: 14.2, portID: 35, portLen: 127, wall: 1.8, drvTop: 3 * IN, portTop: 7.75 * IN } },
+    { label: 'Preset 6 × 9½ × 8″',
+      values: { W: 6 * IN, H: 9.5 * IN, D: 8 * IN, t: 14.2, portID: 35, portLen: 127, wall: 1.8, drvTop: 3 * IN, portTop: 7.5 * IN } }
+  ]
+};
+
+/* =====================================================================================================
+   2. CALCULATIONS (no DOM access below this line until the interface starts)
+   ===================================================================================================== */
+
+// Peak volume the cone can push: Sd (cm²) × Xmax (cm) = cm³. Used for port air speed.
+const SD_XMAX = CONFIG.driver.sd * CONFIG.driver.xmax / 10;
+
+/**
+ * Work out the box volume and port behaviour from the state s.
+ * Returns inside size (Wi, Hi, Di), gross and net volume (litres), port tube numbers, tuning fb (Hz)
+ * and the worst-case port air speed (m/s).
+ */
+function calc(s) {
+  const phys = CONFIG.physics;
+
+  // Inside size is the outside size less a wall on each side.
+  const Wi = s.W - 2 * s.t, Hi = s.H - 2 * s.t, Di = s.D - 2 * s.t;
+  const gross = Math.max(0, Wi) * Math.max(0, Hi) * Math.max(0, Di) / 1e6;   // mm³ to litres
+
+  // The tube passes through the front baffle, so only the part past it takes up room inside the box.
+  const od = s.portID + 2 * s.wall;
+  const tubeIn = Math.max(0, s.portLen - s.t);
+  const tubeVol = Math.PI * Math.pow(od / 20, 2) * (tubeIn / 10) / 1000;     // litres
+  const net = gross - s.drvDisp - tubeVol - s.brace;
+
+  // Port tuning. Sp is the tube's bore area and Leff its length plus the end correction (both cm).
+  const dcm = s.portID / 10, Sp = Math.PI * dcm * dcm / 4;
+  const Leff = s.portLen / 10 + phys.endCorrection * dcm;
+  const fb = net > 0 ? phys.speedOfSound / (2 * Math.PI) * Math.sqrt(Sp / (net * 1000 * Leff)) : NaN;
+
+  // Worst-case air speed in the port: the cone at Xmax, moving at the tuning frequency.
+  const speed = net > 0 ? SD_XMAX * 2 * Math.PI * fb / Sp / 100 : NaN;
+
+  return { Wi, Hi, Di, gross, od, tubeIn, tubeVol, net, fb, speed, Leff, flareR: s.portID / 2 + CONFIG.port.flareLip };
+}
+
+/**
+ * Tube length (mm, front face to inner end) that tunes the box to f Hz.
+ * The tube's own volume shrinks the box, so the answer is refined until it settles.
+ */
+function lenForFb(s, f) {
+  const phys = CONFIG.physics;
+  // The tuning formula solved for length, with the units folded into one constant.
+  const k = Math.pow(phys.speedOfSound / (2 * Math.PI), 2) * Math.PI / 4 / 1000;
+  let L = s.portLen;
+  for (let i = 0; i < 40; i++) {
+    const c = calc(Object.assign({}, s, { portLen: L }));
+    if (!(c.net > 0)) return NaN;
+    const d = s.portID / 10;
+    L = (k * d * d / (f * f * c.net) - phys.endCorrection * d) * 10;
+  }
+  return L;
+}
+
+/** Outside depth (mm) that gives a net air volume of targetL litres, keeping the other dimensions. */
+function depthForVolume(s, targetL) {
+  const c = calc(s);
+  const need = targetL + s.drvDisp + c.tubeVol + s.brace;               // gross volume needed
+  const Di = need * 1e6 / ((s.W - 2 * s.t) * (s.H - 2 * s.t));
+  return Di + 2 * s.t;
+}
+
+/** How far the net volume is from the target, in percent (positive means larger). */
+function volumeDeltaPct(net, targetL) {
+  return (net - targetL) / targetL * 100;
+}
+
+/** Format millimetres as inches in sixteenths, such as 7⅝″. A leading ≈ means the value is not an exact sixteenth. */
+function fracIn(mm) {
+  const inch = mm / IN, n = Math.round(inch * 16);
+  const whole = Math.floor(n / 16), r = n % 16;
+  const glyph = { 8: '½', 4: '¼', 12: '¾', 2: '⅛', 6: '⅜', 10: '⅝', 14: '⅞' };
+  let frac = '';
+  if (r) frac = glyph[r] || (r + '/16');
+  const exact = Math.abs(inch * 16 - n) < 0.05;
+  const body = (whole || !r ? String(whole) : '') + (whole && frac ? ' ' : '') + frac;   // space between whole and fraction
+  return (exact ? '' : '≈') + body + '″';
+}
+
+/**
+ * Fit checks for the box. s is the state, c the result of calc(s), f formats a length for display.
+ * Returns a list of { ok, t } where t is the message to show.
+ */
+function checks(s, c, f) {
+  const d = CONFIG.driver, cl = CONFIG.clearance, tg = CONFIG.target;
+  const out = [];
+  const add = (ok, passText, failText) => out.push({ ok, t: ok ? passText : failText });
+
+  // Baffle width against the driver frame.
+  const sideMargin = (s.W - d.frame) / 2;
+  add(sideMargin >= cl.baffleSide,
+    'Baffle is wide enough for the ' + d.frame + ' mm driver frame.',
+    'Baffle is narrow for the ' + d.frame + ' mm driver frame. Leave at least ' + cl.baffleSide + ' mm each side.');
+
+  // Driver frame against the top edge.
+  const topMargin = s.drvTop - d.frame / 2;
+  add(topMargin >= cl.top,
+    'Driver clears the top edge (' + f(topMargin) + ').',
+    'Driver frame is too close to the top edge.');
+
+  // Port flare against the driver frame and the bottom edge.
+  const gap = (s.portTop - c.flareR) - (s.drvTop + d.frame / 2);
+  add(gap >= cl.portToDriver,
+    'Port flare clears the driver frame by ' + f(gap) + '.',
+    'Port flare is too close to the driver frame. Move the port down or make the box taller.');
+  const bottomMargin = s.H - (s.portTop + c.flareR);
+  add(bottomMargin >= cl.bottom,
+    'Port flare clears the bottom edge (' + f(bottomMargin) + ').',
+    'Port flare is too close to the bottom edge.');
+
+  // Tube against the magnet behind the baffle.
+  const magnetGap = (s.portTop - c.od / 2) - (s.drvTop + d.magnet / 2);
+  add(magnetGap >= cl.magnet,
+    'Tube clears the driver magnet.',
+    'Tube may hit the driver magnet. Increase the spacing.');
+
+  // Tube end against the back wall: leave at least one tube diameter so air can leave the port.
+  const backGap = c.Di - c.tubeIn;
+  add(backGap >= s.portID,
+    'Tube ends ' + f(backGap) + ' from the back wall (at least one diameter).',
+    'Tube ends ' + f(backGap) + ' from the back wall. Leave at least one tube diameter.');
+
+  // Driver depth and cutout size.
+  add(c.Di >= d.depth,
+    'Interior depth fits the driver (about ' + d.depth + ' mm deep).',
+    'Interior depth is less than the driver depth (about ' + d.depth + ' mm).');
+  add(s.cutout <= d.maxCutout,
+    'Cutout is smaller than the ' + d.frame + ' mm frame flange.',
+    'Cutout is too large for the frame flange.');
+
+  // Port air speed and tuning range.
+  add(c.speed <= tg.maxPortSpeed,
+    'Port air speed is low enough to avoid chuffing.',
+    'Port air speed is high and may chuff. Use a wider tube.');
+  const inRange = c.fb >= tg.tuningRange[0] && c.fb <= tg.tuningRange[1];
+  const rangeText = tg.tuningRange[0] + ' to ' + tg.tuningRange[1] + ' Hz range that suits this driver.';
+  add(inRange, 'Tuning is in the ' + rangeText, 'Tuning is outside the ' + rangeText);
+
+  // Net volume against the target volume.
+  const dv = volumeDeltaPct(c.net, s.targetVol);
+  const near = Math.abs(dv) <= tg.volumeTolerance;
+  add(near,
+    'Net volume is within ' + tg.volumeTolerance + '% of the target (' + s.targetVol + ' L).',
+    'Net volume is ' + Math.abs(dv).toFixed(0) + '% ' + (dv > 0 ? 'above' : 'below') + ' the target (' + s.targetVol + ' L).');
+  return out;
+}
+
+/* ---------- Sheet layout: finding where the six panels (or twelve for two boxes) go on one sheet ---------- */
+
+/**
+ * Largest empty rectangle left on the sheet after the placed rectangles `rects` ({x, y, w, h}).
+ * WW and HH are the sheet size and k is the saw kerf, all in mm.
+ * Every placed rectangle is inflated by the kerf on its right and bottom edge, and the sheet by the same
+ * amount. A remaining piece therefore always starts after a kerf, and it gives up one kerf where it meets a
+ * part or the far sheet edge. With byArea the biggest area wins and the longest side breaks ties; otherwise
+ * the longest side wins and the area breaks ties.
+ */
+function maxEmpty(rects, WW, HH, k, byArea) {
+  const Wp = WW + k, Hp = HH + k;
+  // A largest empty rectangle always has each edge against the sheet or a placed rectangle, so only those
+  // coordinates need trying: left edges at 0 or a rectangle's right edge, right edges at the sheet's right
+  // edge or a rectangle's left edge, and tops at 0 or a rectangle's bottom edge.
+  const xs1 = [0], xs2 = [Wp], ys1 = [0];
+  for (const r of rects) { xs1.push(r.x + r.w); xs2.push(r.x); ys1.push(r.y + r.h); }
+  let best = null, bestL = 0, bestA = 0;
+  for (const x1 of xs1) {
+    for (const x2 of xs2) {
+      const tw = x2 - x1 - k;
+      if (tw <= 0) continue;
+      for (const y1 of ys1) {
+        // Grow the rectangle downward from y1 until it meets a rectangle. If one already covers y1, skip.
+        let y2 = Hp, ok = true;
+        for (const r of rects) {
+          if (r.x < x2 && r.x + r.w > x1 && r.y + r.h > y1) {
+            if (r.y <= y1) { ok = false; break; }
+            if (r.y < y2) y2 = r.y;
+          }
+        }
+        if (!ok) continue;
+        const th = y2 - y1 - k;
+        if (th <= 0) continue;
+        const L = Math.max(tw, th), A = tw * th;
+        const win = byArea
+          ? (A > bestA + 1e-6 || (Math.abs(A - bestA) <= 1e-6 && L > bestL))
+          : (L > bestL + 1e-6 || (Math.abs(L - bestL) <= 1e-6 && A > bestA));
+        if (win) { bestL = L; bestA = A; best = { x: x1, y: y1, w: tw, h: th }; }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Lay out panels on a sheet. parts is [{ name, w, h }] in mm, sheetW and sheetH the sheet size, k the kerf.
+ * lock keeps each panel's long side along the sheet's long side. mode picks what stays uncut:
+ *   'side'   the longest possible uncut side first, then leftover area, then fewer bands
+ *   'area'   the largest single uncut rectangle first, then its longest side, then fewer bands
+ *   'bottom' panels packed against the top edge, leaving one full-width strip along the bottom
+ *
+ * Panels go into bands (shelves) so every cut runs edge to edge. Equal-size panels are interchangeable, so
+ * the band contents are chosen by dynamic programming over "how many of each panel type are still unplaced",
+ * and each candidate layout is then scored exactly.
+ *
+ * Returns { ok: true, tr, placed, rem, bands, partArea, remArea, sheetArea }, or { ok: false, reason }.
+ * placed holds each panel's x, y, w, h on the sheet, rem is the uncut rectangle, and tr tells whether the
+ * layout was built on the sheet turned a quarter turn (already undone in placed and rem).
+ */
+function planSheet(parts, sheetW, sheetH, k, lock, mode) {
+  mode = mode || 'side';
+  const n = parts.length;
+
+  // Normalise each panel to a (long, short) pair and stop early if one cannot fit on the sheet at all.
+  const norm = parts.map((p) => ({ name: p.name, a: Math.max(p.w, p.h), b: Math.min(p.w, p.h) }));
+  const lng = Math.max(sheetW, sheetH), sht = Math.min(sheetW, sheetH);
+  for (const p of norm) {
+    if (p.a > lng + 1e-6 || p.b > sht + 1e-6) return { ok: false, reason: 'size', name: p.name, a: p.a, b: p.b };
+  }
+
+  // Group panels of equal size into types. members[t] lists the panels of type t.
+  const keys = [], typeOf = [], members = [], tdim = [];
+  norm.forEach((p, i) => {
+    const key = p.a.toFixed(2) + 'x' + p.b.toFixed(2);
+    let t = keys.indexOf(key);
+    if (t < 0) { t = keys.length; keys.push(key); members.push([]); tdim.push(p); }
+    typeOf[i] = t; members[t].push(i);
+  });
+
+  // A dynamic-programming state is "how many of each type remain", packed into one number with a mixed radix.
+  const T = keys.length, cnt = members.map((m) => m.length);
+  const radix = []; let size = 1;
+  for (let t = 0; t < T; t++) { radix[t] = size; size *= cnt[t] + 1; }
+  const F = size - 1;                     // the state with every panel still to place
+  let best = null, bestP1 = -1, bestP2 = -1;
+
+  // Try the sheet as given, then turned a quarter turn (the bands then run the other way).
+  for (const tr of [false, true]) {
+    if (mode === 'bottom' && tr) continue;
+    const WW = tr ? sheetH : sheetW, HH = tr ? sheetW : sheetH, Wp = WW + k, Hp = HH + k, longX = WW >= HH;
+
+    // Each panel type can lie in one or two orientations. "Kind" is a type in one orientation, with its
+    // size and its size plus kerf (kw, kh).
+    const kinds = [];
+    for (let t = 0; t < T; t++) {
+      const a = tdim[t].a, b = tdim[t].b, opts = [];
+      if (lock) opts.push(longX ? [a, b] : [b, a]);
+      else { opts.push([a, b]); if (a - b > 1e-6) opts.push([b, a]); }
+      for (const o of opts) if (o[0] + k <= Wp + 1e-9 && o[1] + k <= Hp + 1e-9) kinds.push({ t, w: o[0], h: o[1], kw: o[0] + k, kh: o[1] + k });
+    }
+    if (T === 0 || kinds.length === 0 || [...Array(T).keys()].some((t) => !kinds.some((kd) => kd.t === t))) continue;
+
+    // List every possible band content that fits across the sheet: how many panels of each kind side by side.
+    // delta is the state change of placing that band, width its used width and height its tallest panel.
+    const contents = [], cur = new Array(kinds.length).fill(0), tc = new Array(T).fill(0);
+    (function rec(ki, width, height) {
+      if (ki === kinds.length) {
+        if (width > 0) {
+          let delta = 0;
+          for (let t = 0; t < T; t++) delta += tc[t] * radix[t];
+          contents.push({ counts: cur.slice(), tc: tc.slice(), delta, width, height });
+        }
+        return;
+      }
+      const kd = kinds[ki];
+      for (let c = 0; c + tc[kd.t] <= cnt[kd.t]; c++) {
+        const w2 = width + c * kd.kw;
+        if (w2 > Wp + 1e-9) break;
+        cur[ki] = c; tc[kd.t] += c;
+        rec(ki + 1, w2, c > 0 ? Math.max(height, kd.kh) : height);
+        tc[kd.t] -= c;
+      }
+      cur[ki] = 0;
+    })(0, 0, 0);
+    contents.sort((p, q) => p.width - q.width);
+
+    // Cheapest way to place every panel when bands may be at most maxW wide. "Cheapest" is the least total
+    // band height, then the fewest bands. by[r] is the best height for state r, bs[r] its band count and
+    // ch[r] the band content chosen last.
+    const rv = new Array(T).fill(0);
+    const solve = (maxW) => {
+      const by = new Float64Array(size).fill(Infinity), bs = new Int32Array(size), ch = new Int32Array(size).fill(-1);
+      by[0] = 0;
+      for (let r = 1; r < size; r++) {
+        for (let t = 0; t < T; t++) rv[t] = Math.floor(r / radix[t]) % (cnt[t] + 1);
+        for (let ci = 0; ci < contents.length; ci++) {
+          const c = contents[ci];
+          if (c.width > maxW + 1e-9) break;                       // contents are sorted by width
+          let ok = true;
+          for (let t = 0; t < T; t++) if (c.tc[t] > rv[t]) { ok = false; break; }
+          if (!ok) continue;
+          const prev = r - c.delta, y = by[prev] + c.height, s = bs[prev] + 1;
+          if (y < by[r] - 1e-9 || (Math.abs(y - by[r]) <= 1e-9 && s < bs[r])) { by[r] = y; bs[r] = s; ch[r] = ci; }
+        }
+      }
+      return { by, ch };
+    };
+    const feasible = (sol) => sol.by[F] <= Hp + 1e-9;            // the bands fit within the sheet height
+
+    // Band orders to try. Stepped band widths can leave a larger rectangle than equal-width bands, so
+    // 'area' mode also tries other orders.
+    const sorts = mode === 'area'
+      ? [(p, q) => q.height - p.height, (p, q) => q.width - p.width, (p, q) => p.width - q.width, (p, q) => p.height - q.height]
+      : [(p, q) => q.height - p.height];
+
+    // Turn a solution into real panel positions, score it, and keep it if it is the best so far.
+    const consider = (sol) => {
+      const picked = [];
+      for (let r = F; r > 0;) { const c = contents[sol.ch[r]]; picked.push(c); r -= c.delta; }
+      for (const cmp of sorts) {
+        const shelves = picked.slice().sort(cmp);
+        const rects = [], dims = new Array(n), next = members.map(() => 0);
+        let cy = 0, maxX = 0;
+        shelves.forEach((sh, si) => {
+          // Expand the band into individual panels, tallest first, placed left to right.
+          const items = [];
+          sh.counts.forEach((c, ki) => { for (let q = 0; q < c; q++) items.push(kinds[ki]); });
+          items.sort((p, q) => q.kh - p.kh);
+          let cx = 0;
+          for (const kd of items) {
+            const i = members[kd.t][next[kd.t]++];
+            dims[i] = [kd.w, kd.h];
+            rects.push({ i, x: cx, y: cy, w: kd.kw, h: kd.kh, shelf: si });
+            cx += kd.kw;
+          }
+          if (cx > maxX) maxX = cx;
+          cy += sh.height;
+        });
+        const res = { rects, shelves: shelves.length, bbox: maxX * cy };
+
+        // 'bottom' keeps the full-width strip under the block. The other modes take the best real rectangle.
+        const e = mode === 'bottom'
+          ? (HH - cy > 1e-6 ? { x: 0, y: cy, w: WW, h: HH - cy } : null)
+          : maxEmpty(rects, WW, HH, k, mode === 'area');
+        const a = e ? e.w * e.h : 0, L = e ? Math.max(e.w, e.h) : 0;
+
+        // Compare on the mode's main measure, then its second measure, then fewer bands, then a smaller block.
+        const p1 = mode === 'side' ? L : a, p2 = mode === 'side' ? a : L;
+        const better = p1 > bestP1 + 1e-6 || (Math.abs(p1 - bestP1) <= 1e-6 && (p2 > bestP2 + 1e-6 || (Math.abs(p2 - bestP2) <= 1e-6 &&
+          (res.shelves < best.res.shelves || (res.shelves === best.res.shelves && res.bbox < best.res.bbox - 1e-6)))));
+        if (better) { bestP1 = p1; bestP2 = p2; best = { tr, dims, res, e }; }
+      }
+    };
+
+    // Candidate 1: the shortest block across the full width. The leftover keeps the sheet's full width.
+    const full = solve(Wp);
+    if (!feasible(full)) continue;
+    consider(full);
+    if (mode === 'bottom') continue;
+
+    // Candidate 2: the narrowest block that still fits the sheet height. The leftover is a full-height strip.
+    // Binary search over the possible band widths.
+    const widths = [...new Set(contents.map((c) => c.width))].sort((p, q) => p - q);
+    let lo = 0, hi = widths.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (feasible(solve(widths[mid]))) hi = mid; else lo = mid + 1;
+    }
+    consider(solve(widths[lo]));
+  }
+  if (!best) return { ok: false, reason: 'pack' };
+
+  // Undo the quarter turn if the winning layout used it, and describe the result.
+  const tr = best.tr, dims = best.dims, res = best.res, e = best.e;
+  const map = (x, y, w, h) => tr ? { x: y, y: x, w: h, h: w } : { x: x, y: y, w: w, h: h };
+  const placed = res.rects.map((r) => Object.assign(
+    { name: norm[r.i].name, idx: r.i, type: typeOf[r.i], shelf: r.shelf },
+    map(r.x, r.y, dims[r.i][0], dims[r.i][1])));
+  const rem = e ? map(e.x, e.y, e.w, e.h) : { x: 0, y: 0, w: 0, h: 0 };
+
+  // One entry per band: how wide a strip to cut, how far it runs, and the panels in it left to right.
+  const bands = [];
+  for (let s = 0; s < res.shelves; s++) {
+    const rs = res.rects.filter((r) => r.shelf === s).sort((p, q) => p.x - q.x);
+    bands.push({
+      size: Math.max.apply(null, rs.map((r) => dims[r.i][1])),
+      span: tr ? sheetH : sheetW,
+      parts: rs.map((r) => ({ idx: r.i, name: norm[r.i].name,
+        w: tr ? dims[r.i][1] : dims[r.i][0], h: tr ? dims[r.i][0] : dims[r.i][1] }))
+    });
+  }
+  const partArea = norm.reduce((sum, p) => sum + p.a * p.b, 0);
+  return { ok: true, tr, placed, rem, bands, partArea, remArea: rem.w * rem.h, sheetArea: sheetW * sheetH };
+}
+
+/* =====================================================================================================
+   3. INTERFACE
+   ===================================================================================================== */
+(function () {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  /* ---------- State: the live values, started from CONFIG ---------- */
+  const S = {
+    unit: CONFIG.unit,
+    // box
+    W: CONFIG.box.W, H: CONFIG.box.H, D: CONFIG.box.D, t: CONFIG.box.wood,
+    // port tube
+    portID: CONFIG.port.id, portLen: CONFIG.port.length, wall: CONFIG.port.wall,
+    // baffle holes
+    drvTop: CONFIG.placement.driverTop, portTop: CONFIG.placement.portTop, cutout: CONFIG.driver.cutout,
+    // volume deductions and targets
+    drvDisp: CONFIG.driver.displacement, brace: CONFIG.bracing,
+    targetVol: CONFIG.target.volume, targetFb: CONFIG.target.tuning,
+    // sheet layout
+    sheetW: CONFIG.sheet.W, sheetH: CONFIG.sheet.H, kerf: CONFIG.sheet.kerf,
+    lock: CONFIG.sheet.lockGrain, boxes: CONFIG.sheet.boxes, mode: CONFIG.sheet.mode,
+    // look
+    finish: CONFIG.finish, cutaway: CONFIG.view.cutaway, dims: CONFIG.view.dimensions
+  };
+
+  /* ---------- Input fields: each is a number box (plus a slider unless noSlider) tied to one state value ---------- */
+  const field = (key, label, extra) =>
+    Object.assign({ key, label, min: CONFIG.limits[key][0], max: CONFIG.limits[key][1] }, extra);
+  const EXT = [field('W', 'Width'), field('H', 'Height'), field('D', 'Depth')];
+  const PORT = [
+    field('portID', 'Tube inside diameter'),
+    field('portLen', 'Tube length (front face to inner end)'),
+    field('wall', 'Tube wall thickness', { noSlider: true })
+  ];
+  const DRV = [
+    field('drvTop', 'Driver center from top'),
+    field('portTop', 'Port center from top'),
+    field('cutout', 'Driver cutout diameter', { noSlider: true })
+  ];
+  const SHEET = [
+    field('sheetW', 'Sheet width', { noSlider: true }),
+    field('sheetH', 'Sheet height', { noSlider: true }),
+    field('kerf', 'Saw kerf', { noSlider: true, allowZero: true })
+  ];
+  const ALL = EXT.concat(PORT, DRV, SHEET);
+
+  // Note shown under the sheet drawing for each "keep uncut" mode.
+  const MODE_NOTE = {
+    side: 'The layout keeps the longest possible uncut side, so the panels gather along one edge.',
+    bottom: 'The panels are packed against the top edge, leaving one full-width strip along the bottom.',
+    area: 'The layout keeps the single largest uncut rectangle.'
+  };
+
+  /* ---------- Unit conversion and number formatting ---------- */
+  const toU = (mm) => S.unit === 'in' ? mm / IN : mm;                  // stored mm to displayed value
+  const fromU = (v) => S.unit === 'in' ? v * IN : v;                   // displayed value to stored mm
+  const trim = (v, d) => String(+v.toFixed(d));                        // round and drop trailing zeros
+  const fmt = (mm) => S.unit === 'in' ? fracIn(mm) + ' (' + trim(mm, 1) + ' mm)' : trim(mm, 1) + ' mm (' + fracIn(mm) + ')';
+  const fmtShort = (mm) => S.unit === 'in' ? fracIn(mm) : trim(mm, 1) + ' mm';
+  const fmtDec = (mm) => S.unit === 'in' ? trim(mm / IN, 2) + '″' : trim(mm, 0) + ' mm';
+  const fmtArea = (mm2) => S.unit === 'in' ? trim(mm2 / (IN * IN), 0) + ' in²' : trim(mm2 / 100, 0) + ' cm²';
+
+  /* ---------- Build the controls that come from CONFIG ---------- */
+
+  // Number boxes and sliders.
+  function fieldHTML(f) {
+    return '<div class="row" data-k="' + f.key + '"><label for="n_' + f.key + '">' + f.label + '</label>' +
+      '<div class="inp"><input id="n_' + f.key + '" type="number" inputmode="decimal" step="any"><span class="u"></span></div>' +
+      (f.noSlider ? '' : '<input id="r_' + f.key + '" type="range" aria-label="' + f.label + ' slider">') +
+      '<div class="alt"></div></div>';
+  }
+  $('fExt').innerHTML = EXT.map(fieldHTML).join('');
+  $('fPort').innerHTML = PORT.map(fieldHTML).join('');
+  $('fDrv').innerHTML = DRV.map(fieldHTML).join('');
+  $('fSheet').innerHTML = SHEET.map(fieldHTML).join('');
+
+  // Wood thickness menu.
+  CONFIG.woodOptions.forEach((o) => {
+    const opt = document.createElement('option');
+    opt.value = o.mm; opt.textContent = o.label;
+    $('selT').appendChild(opt);
+  });
+
+  /** Add a pill-shaped quick-pick button to a container. */
+  function addChip(container, text, onClick, dataset) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'chip'; b.textContent = text;
+    Object.assign(b.dataset, dataset || {});
+    b.addEventListener('click', onClick);
+    container.appendChild(b);
+  }
+  CONFIG.port.idChoices.forEach((d) => addChip($('portChips'), d + ' mm', () => { S.portID = d; changed(); }, { d }));
+  Object.keys(CONFIG.finishes).forEach((k) => addChip($('finChips'), CONFIG.finishes[k].name, () => { S.finish = k; changed(); }, { k }));
+
+  // Box preset buttons.
+  CONFIG.presets.forEach((p) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn'; b.textContent = p.label;
+    b.addEventListener('click', () => { Object.assign(S, p.values); changed(); });
+    $('presetBtns').appendChild(b);
+  });
+
+  // Sheet size buttons. They depend on the unit, so syncUnits() rebuilds them.
+  function buildSheetChips() {
+    $('sheetChips').innerHTML = '';
+    CONFIG.sheet.presets[S.unit].forEach((p) => {
+      const w = S.unit === 'in' ? p[0] * IN : p[0], h = S.unit === 'in' ? p[1] * IN : p[1];
+      addChip($('sheetChips'), p[0] + ' × ' + p[1] + (S.unit === 'in' ? '″' : ' mm'),
+        () => { S.sheetW = w; S.sheetH = h; changed(); }, { w, h });
+    });
+  }
+
+  // Footer text, built from the physics and driver values so it never goes out of date.
+  $('foot').innerHTML = 'Port tuning uses the standard formula <code>fb = c/2π · √(S / (V · L<sub>eff</sub>))</code> with one flared end ' +
+    '(end correction ' + CONFIG.physics.endCorrection + ' × diameter). Air speed is the worst case with the cone at Xmax ' +
+    '(Sd ' + CONFIG.driver.sd + ' cm², Xmax ' + CONFIG.driver.xmax + ' mm). Measure the finished box and trim the tube to land the tuning.';
+
+  /* ---------- Wire up the controls ---------- */
+
+  // Number boxes and sliders write into the state in millimetres.
+  ALL.forEach((f) => {
+    const n = $('n_' + f.key), r = $('r_' + f.key);
+    n.addEventListener('input', () => {
+      const v = parseFloat(n.value);
+      if (!isFinite(v) || v < 0 || (v === 0 && !f.allowZero)) return;
+      S[f.key] = fromU(v); changed();
+    });
+    if (r) r.addEventListener('input', () => { S[f.key] = fromU(parseFloat(r.value)); changed(); });
+  });
+
+  // Plain number boxes whose value is already in the stored unit (litres or Hz).
+  function bindNum(id, key, min) {
+    $(id).addEventListener('input', () => {
+      const v = parseFloat($(id).value);
+      if (!isFinite(v) || v < (min || 0)) return;
+      S[key] = v; changed();
+    });
+  }
+  bindNum('nDisp', 'drvDisp', 0); bindNum('nBrace', 'brace', 0);
+  bindNum('nTargetVol', 'targetVol', 0.1); bindNum('nTargetFb', 'targetFb', 20);
+
+  $('selT').addEventListener('change', () => { S.t = parseFloat($('selT').value); changed(); });
+  $('uIn').addEventListener('click', () => { S.unit = 'in'; syncUnits(); changed(); });
+  $('uMm').addEventListener('click', () => { S.unit = 'mm'; syncUnits(); changed(); });
+
+  // "Set length" tunes the port to the target frequency. "Fit depth" sizes the depth to the target volume.
+  $('btnSetLen').addEventListener('click', () => {
+    const L = lenForFb(S, S.targetFb);
+    if (isFinite(L) && L > 0) { S.portLen = Math.round(L / CONFIG.roundTo) * CONFIG.roundTo; changed(); }
+  });
+  $('btnFitDepth').addEventListener('click', () => {
+    const D = depthForVolume(S, S.targetVol);
+    if (isFinite(D) && D > 2 * S.t) { S.D = Math.round(D / CONFIG.roundTo) * CONFIG.roundTo; changed(); }
+  });
+
+  // View tools and sheet options.
+  $('tgCut').addEventListener('click', () => { S.cutaway = !S.cutaway; changed(); });
+  $('tgDim').addEventListener('click', () => { S.dims = !S.dims; changed(); });
+  $('btnReset').addEventListener('click', () => resetView());
+  $('cLock').addEventListener('change', () => { S.lock = $('cLock').checked; changed(); });
+  [1, 2].forEach((q) => $('bx' + q).addEventListener('click', () => { S.boxes = q; changed(); }));
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => { S.mode = b.dataset.mode; changed(); }));
+
+  /** Update unit labels, step sizes, slider ends and sheet buttons after the unit changes. */
+  function syncUnits() {
+    $('uIn').setAttribute('aria-pressed', S.unit === 'in');
+    $('uMm').setAttribute('aria-pressed', S.unit === 'mm');
+    ALL.forEach((f) => {
+      const row = document.querySelector('[data-k="' + f.key + '"]');
+      row.querySelector('.u').textContent = S.unit === 'in' ? '″' : 'mm';
+      const n = $('n_' + f.key), r = $('r_' + f.key);
+      n.step = S.unit === 'in' ? '0.0625' : '0.5';
+      if (r) { r.min = toU(f.min); r.max = toU(f.max); r.step = S.unit === 'in' ? '0.0625' : '0.5'; }
+    });
+    buildSheetChips();
+  }
+
+  /* ---------- Results: everything the panel shows, redrawn after each change ---------- */
+  let C = calc(S);               // latest calculation, also read by the 3D scene and the sheet layout
+
+  /** Set an input's value unless the user is typing in it. */
+  function setIdle(id, value) {
+    const el = $(id);
+    if (document.activeElement !== el) el.value = value;
+  }
+
+  /** Copy the state into the inputs, sliders and quick-pick buttons. */
+  function syncInputs() {
+    ALL.forEach((f) => {
+      const row = document.querySelector('[data-k="' + f.key + '"]');
+      setIdle('n_' + f.key, S.unit === 'in' ? trim(toU(S[f.key]), 3) : trim(S[f.key], 1));
+      const r = $('r_' + f.key);
+      if (r) r.value = toU(S[f.key]);
+      row.querySelector('.alt').textContent = S.unit === 'in' ? trim(S[f.key], 1) + ' mm' : fracIn(S[f.key]);
+    });
+    setIdle('nDisp', S.drvDisp); setIdle('nBrace', S.brace);
+    setIdle('nTargetVol', S.targetVol); setIdle('nTargetFb', S.targetFb);
+    $('targetAlt').textContent = '= ' + (S.targetVol / LITRES_PER_FT3).toFixed(3) + ' ft³';
+
+    // The thickness menu gains an entry when the state holds a thickness that is not in the list.
+    $('selT').value = String(S.t);
+    if (!$('selT').value) {
+      const o = document.createElement('option');
+      o.value = S.t; o.textContent = trim(S.t, 2) + ' mm';
+      $('selT').appendChild(o); $('selT').value = String(S.t);
+    }
+  }
+
+  /** Mark the buttons that match the state as pressed. */
+  function syncToggles() {
+    document.querySelectorAll('#portChips .chip').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.d === S.portID)));
+    document.querySelectorAll('#finChips .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.k === S.finish)));
+    document.querySelectorAll('#sheetChips .chip').forEach((b) => b.setAttribute('aria-pressed',
+      String(Math.abs(+b.dataset.w - S.sheetW) < 0.5 && Math.abs(+b.dataset.h - S.sheetH) < 0.5)));
+    $('tgCut').setAttribute('aria-pressed', S.cutaway);
+    $('tgDim').setAttribute('aria-pressed', S.dims);
+    $('cLock').checked = S.lock;
+    [1, 2].forEach((q) => $('bx' + q).setAttribute('aria-pressed', String(S.boxes === q)));
+    document.querySelectorAll('[data-mode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
+  }
+
+  /** Net volume, how it compares with the target, the figures list and the tube length for the target tuning. */
+  function renderResults() {
+    const net = C.net;
+    $('rNet').textContent = isFinite(net) && net > 0 ? net.toFixed(2) : '–';
+
+    const dv = volumeDeltaPct(net, S.targetVol), pill = $('rPill');
+    if (!(net > 0)) { pill.textContent = 'no air space'; pill.className = 'pill warn'; }
+    else if (Math.abs(dv) <= CONFIG.target.volumeTolerance) { pill.textContent = 'matches target'; pill.className = 'pill ok'; }
+    else { pill.textContent = (dv > 0 ? '+' : '') + dv.toFixed(0) + '% vs target'; pill.className = 'pill warn'; }
+
+    const rows = [
+      ['Net volume', net > 0 ? (net / LITRES_PER_FT3).toFixed(3) + ' ft³' : '–'],
+      ['Gross internal volume', C.gross.toFixed(2) + ' L'],
+      ['Internal size', fmtShort(C.Wi) + ' × ' + fmtShort(C.Hi) + ' × ' + fmtShort(C.Di)],
+      ['Port tuning', isFinite(C.fb) ? C.fb.toFixed(1) + ' Hz' : '–'],
+      ['Port air speed at Xmax', isFinite(C.speed) ? C.speed.toFixed(1) + ' m/s' : '–'],
+      ['Tube volume in box', C.tubeVol.toFixed(2) + ' L'],
+      ['Deducted: driver + bracing', (S.drvDisp + S.brace).toFixed(2) + ' L']
+    ];
+    $('rList').innerHTML = rows.map((r) => '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>').join('');
+
+    const Lt = lenForFb(S, S.targetFb);
+    $('lenFor').innerHTML = isFinite(Lt) && Lt > 0
+      ? 'Tube length for ' + S.targetFb + ' Hz in this box: <b>' + fmt(Lt) + '</b>'
+      : 'Enter a larger box to calculate a tube length.';
+  }
+
+  /** Panel sizes for the cut list (quantities follow the number of boxes) and the hole positions. */
+  function renderCutList() {
+    const row = (qty, name, a, b) => '<tr><td>' + name + '</td><td class="n q">×' + qty + '</td><td class="n">' + fmtShort(a) + ' × ' + fmtShort(b) + '</td></tr>';
+    $('cutBody').innerHTML =
+      row(S.boxes, 'Front baffle', S.W, S.H) + row(S.boxes, 'Back', S.W, S.H) +
+      row(2 * S.boxes, 'Top and bottom', S.W, C.Di) + row(2 * S.boxes, 'Sides', C.Hi, C.Di);
+    $('holes').innerHTML = 'Driver hole ⌀ <b>' + fmtShort(S.cutout) + '</b> centered ' + fmtShort(S.drvTop) +
+      ' from the top. Port hole ⌀ <b>' + fmtShort(C.od) + '</b> centered ' + fmtShort(S.portTop) + ' from the top.';
+  }
+
+  /** The fit-check list. Warnings get a hidden "Warning:" prefix for screen readers. */
+  function renderChecks() {
+    $('checks').innerHTML = checks(S, C, fmtShort).map((c) =>
+      '<li class="' + (c.ok ? 'ok' : 'warn') + '"><span class="m" aria-hidden="true">' + (c.ok ? '✓' : '!') + '</span><span>' +
+      (c.ok ? '' : '<span class="sr" style="position:absolute;left:-9999px">Warning: </span>') + c.t + '</span></li>').join('');
+  }
+
+  /** Recalculate and redraw every panel of text. The 3D scene is updated separately by changed(). */
+  function refresh() {
+    C = calc(S);
+    syncInputs();
+    syncToggles();
+    renderResults();
+    renderCutList();
+    renderChecks();
+    $('dimW').textContent = fmtShort(S.W);
+    $('dimH').textContent = fmtShort(S.H);
+    $('dimD').textContent = fmtShort(S.D);
+    scheduleSheet();
+  }
+
+  /* ---------- Sheet layout: panel list, packing, drawing ---------- */
+  let shTimer = 0, shKey = '', shRes = null;   // debounce timer, cache key and cached packing result
+
+  /** The panels to cut: six per box, named A and B when two boxes share the sheet. Null if the walls leave no panels. */
+  function sheetParts() {
+    if (!(C.Wi > 0 && C.Hi > 0 && C.Di > 0)) return null;
+    const one = [
+      { name: 'Front', w: S.W, h: S.H }, { name: 'Back', w: S.W, h: S.H },
+      { name: 'Top', w: S.W, h: C.Di }, { name: 'Bottom', w: S.W, h: C.Di },
+      { name: 'Left side', w: C.Hi, h: C.Di }, { name: 'Right side', w: C.Hi, h: C.Di }
+    ];
+    if (S.boxes < 2) return one;
+    const tag = (L) => one.map((p) => ({ name: L + ' ' + p.name, w: p.w, h: p.h }));
+    return tag('A').concat(tag('B'));
+  }
+
+  /** Repack shortly after the last change, so dragging a slider does not repack on every tick. */
+  function scheduleSheet() {
+    clearTimeout(shTimer);
+    shTimer = setTimeout(renderSheet, CONFIG.sheet.debounceMs);
+  }
+
+  /** Pack the panels (only when something that affects the packing changed) and draw the result. */
+  function renderSheet() {
+    const parts = sheetParts();
+    if (!parts) {
+      $('sheetFig').innerHTML = ''; $('sheetStats').innerHTML = ''; $('sheetPlan').innerHTML = '';
+      $('sheetNote').className = 'note warn-note';
+      $('sheetNote').textContent = 'The walls are too thick for this box size, so there are no panels to lay out.';
+      return;
+    }
+    const key = JSON.stringify([parts.map((p) => [+p.w.toFixed(3), +p.h.toFixed(3)]),
+      +S.sheetW.toFixed(3), +S.sheetH.toFixed(3), +S.kerf.toFixed(3), S.lock, S.mode]);
+    if (key !== shKey) { shRes = planSheet(parts, S.sheetW, S.sheetH, S.kerf, S.lock, S.mode); shKey = key; }
+    drawSheet(shRes, parts.length);
+  }
+
+  /**
+   * SVG text centered in a box. lines are tried first; if they would be too small to read, the short
+   * label is used instead, and if even that is too small nothing is drawn. Returns SVG markup.
+   */
+  function labelAt(cx, cy, bw, bh, lines, short, cls) {
+    const L = Math.max.apply(null, lines.map((t) => t.length));
+    let use = lines, fs = Math.min(11, (bw - 4) / (L * 0.62), (bh - 4) / (lines.length * 1.2 + 0.2));
+    if (fs < 6.5) { use = [short]; fs = Math.min(11, (bw - 3) / (short.length * 0.62 + 0.2), (bh - 3) / 1.3); }
+    if (fs < 6) return '';
+    const y0 = cy - (use.length - 1) * fs * 0.6 + fs * 0.35;
+    return use.map((t, j) => '<text class="' + cls + '" x="' + cx.toFixed(1) + '" y="' + (y0 + j * fs * 1.2).toFixed(1) +
+      '" font-size="' + fs.toFixed(1) + '" text-anchor="middle">' + t + '</text>').join('');
+  }
+
+  /** Show the packing result: the drawing, the figures, the band-by-band cut plan and the explanatory note. */
+  function drawSheet(res, n) {
+    const fig = $('sheetFig'), stats = $('sheetStats'), plan = $('sheetPlan'), note = $('sheetNote');
+
+    // Nothing fits: explain why and clear the rest.
+    if (!res.ok) {
+      fig.innerHTML = ''; stats.innerHTML = ''; plan.innerHTML = '';
+      note.className = 'note warn-note';
+      note.textContent = res.reason === 'size'
+        ? res.name + ' (' + fmtShort(res.a) + ' × ' + fmtShort(res.b) + ') is larger than this sheet. Choose a bigger sheet.'
+        : 'The ' + n + ' panels do not fit on this sheet in bands. ' +
+          (S.mode === 'bottom' ? 'Try keeping one side uncut, a bigger sheet' : 'Try a bigger sheet') + (n > 6 ? ', or one box.' : '.');
+      return;
+    }
+    note.className = 'note';
+    note.textContent = MODE_NOTE[S.mode] + ' Panels sit in bands so every cut runs edge to edge. Sheet edges are treated as square, and a ' +
+      fmtShort(S.kerf) + ' kerf is left between neighbors. Bands are numbered from the ' + (res.tr ? 'left' : 'top') + ' edge of the drawing.';
+
+    // The drawing: the sheet, the hatched leftover piece, then each panel with its label.
+    const dr = CONFIG.sheet.drawing;
+    const s = Math.min((dr.width - 2) / S.sheetW, (dr.maxHeight - 2) / S.sheetH);   // px per mm
+    const w = S.sheetW * s, h = S.sheetH * s;
+    let svg = '<svg viewBox="0 0 ' + (w + 2).toFixed(1) + ' ' + (h + 2).toFixed(1) + '" role="img" aria-label="Layout of ' + n + ' panels on a ' +
+      fmtShort(S.sheetW) + ' by ' + fmtShort(S.sheetH) + ' sheet" style="max-width:' + Math.ceil(w + 2) + 'px">' +
+      '<defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+      '<line x1="0" y1="0" x2="0" y2="7" class="sv-hatch"/></pattern></defs><g transform="translate(1 1)">' +
+      '<rect class="sv-sheet" x="0" y="0" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '"/>';
+    const r = res.rem;
+    if (r.w > 0 && r.h > 0) {
+      svg += '<rect class="sv-rem" fill="url(#hatch)" x="' + (r.x * s).toFixed(1) + '" y="' + (r.y * s).toFixed(1) +
+        '" width="' + (r.w * s).toFixed(1) + '" height="' + (r.h * s).toFixed(1) + '"/>' +
+        labelAt((r.x + r.w / 2) * s, (r.y + r.h / 2) * s, r.w * s, r.h * s, ['Remaining', fmtDec(r.w) + ' × ' + fmtDec(r.h)], 'Left', 'sv-tr');
+    }
+    res.placed.forEach((p) => {
+      // Colour by panel type; panels of box B are drawn lighter.
+      svg += '<rect class="sv-part sv-p' + (p.type % 3) + (/^B /.test(p.name) ? ' sv-pB' : '') + '" x="' + (p.x * s).toFixed(1) + '" y="' + (p.y * s).toFixed(1) +
+        '" width="' + (p.w * s).toFixed(1) + '" height="' + (p.h * s).toFixed(1) + '"/>' +
+        labelAt((p.x + p.w / 2) * s, (p.y + p.h / 2) * s, p.w * s, p.h * s,
+          [(p.idx + 1) + ' ' + p.name, fmtShort(p.w) + ' × ' + fmtShort(p.h)], String(p.idx + 1), 'sv-t');
+    });
+    svg += '</g></svg>';
+    fig.innerHTML = svg;
+
+    // Figures for the leftover piece and the panels.
+    const sPct = (a) => (a / res.sheetArea * 100).toFixed(0) + '%';
+    const rows = [
+      ['Remaining piece', r.w > 0 ? fmtDec(r.w) + ' × ' + fmtDec(r.h) : 'none'],
+      ['Longest uncut side', r.w > 0 ? fmtDec(Math.max(r.w, r.h)) : 'none'],
+      ['Remaining area', fmtArea(res.remArea) + ' · ' + sPct(res.remArea)],
+      ['Panels laid out', n + ' for ' + S.boxes + (S.boxes === 1 ? ' box' : ' boxes')],
+      ['Panels use', fmtArea(res.partArea) + ' · ' + sPct(res.partArea)],
+      ['Bands to cut', String(res.bands.length)]
+    ];
+    stats.innerHTML = rows.map((x) => '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>').join('');
+
+    // Cut plan: first cut each band from the sheet, then split it into its panels.
+    plan.innerHTML = res.bands.map((b, i) => '<li><b>Band ' + (i + 1) + '</b> · cut a ' + fmtShort(b.size) + ' × ' + fmtShort(b.span) + ' strip, then split it into' +
+      b.parts.map((p) => '<span class="pp">#' + (p.idx + 1) + ' ' + p.name + ' · ' + fmtShort(p.w) + ' × ' + fmtShort(p.h) + '</span>').join('') + '</li>').join('');
+  }
+
+  /* ---------- 3D scene (Three.js) ---------- */
+  let renderer, scene, camera, controls, group, dimGroup, ground, dirty = true, hasGL = false;
+  const texCache = {};            // one generated wood texture per finish
+
+  /**
+   * Generate a wood-grain texture for a finish on a canvas: wavy growth rings between the finish's light
+   * and dark colours, plus fine grain lines and streaks on top.
+   */
+  function woodTexture(key) {
+    if (texCache[key]) return texCache[key];
+    const f = CONFIG.finishes[key], N = CONFIG.view.woodTexturePx, cv = document.createElement('canvas');
+    cv.width = cv.height = N;
+    const ctx = cv.getContext('2d'), img = ctx.createImageData(N, N), d = img.data;
+    const smooth = (a, b, x) => { const q = Math.min(1, Math.max(0, (x - a) / (b - a))); return q * q * (3 - 2 * q); };
+    const R = f.rings * 3;                   // whole number of growth rings across the tile, so the texture repeats cleanly
+
+    // Seamless value noise: random values on an integer grid that wraps every px by py cells, blended smoothly.
+    const hash = (ix, iy) => {
+      let n = Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(key.length * 7 + key.charCodeAt(0), 2246822519);
+      n = Math.imul(n ^ (n >>> 13), 1274126177);
+      return ((n ^ (n >>> 16)) >>> 0) / 4294967295;
+    };
+    const pnoise = (x, y, px, py) => {
+      const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+      const ax = ((x0 % px) + px) % px, bx = (ax + 1) % px, ay = ((y0 % py) + py) % py, by = (ay + 1) % py;
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+      const top = hash(ax, ay) + (hash(bx, ay) - hash(ax, ay)) * sx;
+      const bot = hash(ax, by) + (hash(bx, by) - hash(ax, by)) * sx;
+      return top + (bot - top) * sy;
+    };
+    // Several layers of noise, each twice as fine and half as strong. Result is roughly 0 to 1.
+    const fbm = (x, y, px, py, oct) => {
+      let sum = 0, amp = 0.5, norm = 0;
+      for (let o = 0; o < oct; o++) { sum += amp * pnoise(x * (1 << o), y * (1 << o), px * (1 << o), py * (1 << o)); norm += amp; amp /= 2; }
+      return sum / norm;
+    };
+
+    // The grain runs along u. v steps across the grain, from ring to ring.
+    for (let y = 0; y < N; y++) {
+      const v = y / N;
+      for (let x = 0; x < N; x++) {
+        const u = x / N;
+        // Ring position: straight rings bent by slow, large waves (the arched "cathedral" figure) plus small wobble.
+        const ring = v * R + 4.5 * (fbm(u, v, 1, 1, 2) - 0.5) + 0.7 * (fbm(u * 3, v * 2, 3, 2, 2) - 0.5) + 0.12 * (pnoise(u * 12, v * 6, 12, 6) - 0.5);
+        const fr = ring - Math.floor(ring);
+        // Each ring has soft pale earlywood that darkens into a thin, firm band of latewood, then drops back.
+        const late = smooth(0.5, 0.95, fr) * (1 - smooth(0.95, 1, fr));
+        let tone = 0.2 + 0.5 * late;
+        tone += 0.18 * (fbm(u * 3, v * 3, 3, 3, 3) - 0.5);                       // blotchy colour changes across the board
+        tone += 0.3 * (pnoise(u * 4, v * 400, 4, 400) - 0.5);                   // long, fine fibres
+        tone += 0.16 * (pnoise(u * 10, v * 150, 10, 150) - 0.5);
+        tone = Math.min(1, Math.max(0, tone));
+        // Small open pores: short dark dashes along the grain.
+        const pore = smooth(0.86, 0.98, pnoise(u * 50, v * 400, 50, 400)) * 0.5;
+        const i = (y * N + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const base = f.a[c] + (f.b[c] - f.a[c]) * tone;
+          d[i + c] = base + (f.line[c] - base) * pore;
+        }
+        d[i + 3] = 255;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.anisotropy = renderer ? renderer.capabilities.getMaxAnisotropy() : 4;
+    texCache[key] = tex;
+    return tex;
+  }
+
+  /**
+   * Give a panel's geometry texture coordinates so the grain runs along `grain` ('x', 'y' or 'z') and the
+   * texture repeats every woodTileMm. Each face is mapped from the two axes it lies in. off shifts the
+   * pattern so neighbouring panels do not look identical.
+   */
+  function applyWoodUV(geo, grain, off) {
+    const pos = geo.attributes.position, nor = geo.attributes.normal;
+    const uv = new Float32Array(pos.count * 2), TILE = CONFIG.view.woodTileMm;
+    for (let i = 0; i < pos.count; i++) {
+      const P = { x: pos.getX(i), y: pos.getY(i), z: pos.getZ(i) };
+      const ax = Math.abs(nor.getX(i)), ay = Math.abs(nor.getY(i)), az = Math.abs(nor.getZ(i));
+      let p, q;                                         // the two axes this face lies in
+      if (az >= ax && az >= ay) { p = 'x'; q = 'y'; }
+      else if (ax >= ay) { p = 'z'; q = 'y'; }
+      else { p = 'x'; q = 'z'; }
+      let u = P[p], v = P[q];
+      if (grain === q) { u = P[q]; v = P[p]; }          // turn the texture so its grain follows `grain`
+      uv[i * 2] = u / TILE + off[0];
+      uv[i * 2 + 1] = v / TILE + off[1];
+    }
+    geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  }
+
+  /** Read a CSS colour token (such as --accent) as a Three.js colour, so the scene follows the page theme. */
+  function cssColor(name) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return new THREE.Color(v || '#888888');
+  }
+
+  /** Create the renderer, camera, lights, ground shadow and orbit controls, then start the draw loop. */
+  function initGL() {
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: $('gl'), antialias: true, alpha: false });
+    } catch (e) { $('glmsg').hidden = false; return; }
+    hasGL = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(CONFIG.view.fov, 1, 5, 6000);
+
+    // Lighting: soft sky light, one shadow-casting key light, one cool fill light.
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x8c8f8f, 0.6));
+    const key = new THREE.DirectionalLight(0xffffff, 0.55);
+    key.position.set(300, 520, 420); key.castShadow = true;
+    key.shadow.mapSize.set(1024, 1024);
+    Object.assign(key.shadow.camera, { left: -450, right: 450, top: 450, bottom: -450, near: 50, far: 1600 });
+    key.shadow.bias = -0.0006;
+    scene.add(key);
+    const fill = new THREE.DirectionalLight(0xdfe9ff, 0.2); fill.position.set(-400, 120, 260); scene.add(fill);
+
+    group = new THREE.Group(); scene.add(group);          // the box, driver and port
+    dimGroup = new THREE.Group(); scene.add(dimGroup);    // the dimension lines
+
+    // A shadow-only ground plane under the box.
+    ground = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.ShadowMaterial({ opacity: 0.28 }));
+    ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.09;
+    controls.minDistance = CONFIG.view.minDistance; controls.maxDistance = CONFIG.view.maxDistance;
+    controls.maxPolarAngle = Math.PI * 0.62;
+    controls.addEventListener('change', () => { dirty = true; });
+    applyTheme();
+    resetView();
+    new ResizeObserver(resize).observe($('stage'));
+    resize();
+
+    // Draw only when something moved or changed.
+    (function loop() {
+      requestAnimationFrame(loop);
+      const moved = controls.update();
+      if (moved || dirty) { render(); dirty = false; }
+    })();
+  }
+
+  /** Put the camera back at its starting angle and distance, scaled to the box size. */
+  function resetView() {
+    if (!hasGL) return;
+    const v = CONFIG.view, longest = Math.max(S.W, S.H, S.D);
+    const dir = new THREE.Vector3(v.startDirection[0], v.startDirection[1], v.startDirection[2]).normalize();
+    const portrait = (camera.aspect || 1.5) < 1.2;                 // stand back further when the stage is narrow
+    camera.position.copy(dir.multiplyScalar(longest * v.distanceFactor * (portrait ? 1.3 : 1)));
+    controls.target.set(0, 0, 0);
+    controls.update(); dirty = true;
+  }
+
+  /** Match the canvas and camera to the stage size. */
+  function resize() {
+    if (!hasGL) return;
+    const w = $('stage').clientWidth, h = $('stage').clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true;
+  }
+
+  /** Recolour the scene background and dimension lines from the page theme. */
+  function applyTheme() {
+    if (!hasGL) return;
+    scene.background = cssColor('--stage');
+    dirty = true; buildDims();
+  }
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => setTimeout(applyTheme, 0));
+  new MutationObserver(() => setTimeout(applyTheme, 0)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  /** Free the geometry of everything in a group and empty it. */
+  function disposeGroup(g) {
+    while (g.children.length) {
+      const o = g.children.pop();
+      if (o.geometry) o.geometry.dispose();
+      if (o.children && o.children.length) disposeGroup(o);
+    }
+  }
+
+  /** A surface of revolution from [radius, z] points, turned so its axis points out of the front of the box. */
+  function lathe(points, segs) {
+    const g = new THREE.LatheGeometry(points.map((p) => new THREE.Vector2(p[0], p[1])), segs || 64);
+    g.rotateX(Math.PI / 2);
+    return g;
+  }
+
+  /**
+   * A simple model of the driver: mounting flange, surround, cone, dust cap, screws, basket and magnet.
+   * The frame and magnet sizes come from CONFIG.driver. The cone and basket proportions are a fixed drawing
+   * of a typical small full-range driver. Z = 0 is the front of the baffle, and negative z is behind it.
+   */
+  function buildDriver() {
+    const FR = CONFIG.driver.frame, MAG = CONFIG.driver.magnet;
+    const g = new THREE.Group();
+    const steel = new THREE.MeshStandardMaterial({ color: 0x17191b, roughness: 0.5, metalness: 0.3, side: THREE.DoubleSide });
+    const rubber = new THREE.MeshStandardMaterial({ color: 0x0b0b0c, roughness: 0.85 });
+    const cone = new THREE.MeshStandardMaterial({ color: 0x30363b, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+    const copper = new THREE.MeshStandardMaterial({ color: 0xb8733a, roughness: 0.3, metalness: 0.4 });
+    const silver = new THREE.MeshStandardMaterial({ color: 0xb9bec2, roughness: 0.35, metalness: 0.6 });
+    const ferrite = new THREE.MeshStandardMaterial({ color: 0x1b1b1b, roughness: 0.8 });
+
+    // Mounting flange: a thin ring on the baffle.
+    g.add(new THREE.Mesh(lathe([[43, 0.9], [FR / 2, 0.9], [FR / 2, -0.9], [43, -0.9]]), steel));
+    // Rubber surround around the cone edge.
+    const surround = new THREE.Mesh(new THREE.TorusGeometry(43.4, 2.6, 12, 72), rubber);
+    surround.scale.z = 0.55; surround.position.z = 0.6; g.add(surround);
+    // Cone: a curved funnel from the surround down to the voice coil.
+    const cp = [];
+    for (let i = 0; i <= 14; i++) { const s = i / 14; cp.push([41 - 29 * s, 0.6 - 17 * Math.pow(s, 1.5)]); }
+    g.add(new THREE.Mesh(lathe(cp, 72), cone));
+    // Copper dust cap in the middle of the cone.
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(13, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2.6), copper);
+    cap.rotation.x = Math.PI / 2; cap.position.z = -17.4 - 13 * Math.cos(Math.PI / 2.6) + 13 * 0.15; g.add(cap);
+    // Four mounting screws on the flange.
+    for (let k = 0; k < 4; k++) {
+      const a = Math.PI / 4 + k * Math.PI / 2;
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 2.3, 1.6, 16), silver);
+      screw.rotation.x = Math.PI / 2; screw.position.set(Math.cos(a) * 49.6, Math.sin(a) * 49.6, 1.1); g.add(screw);
+    }
+    // Basket, magnet and back plate, behind the baffle.
+    g.add(new THREE.Mesh(lathe([[FR / 2 - 4, -0.9], [FR / 2 - 7, -12], [38, -38], [27, -57]], 64), steel));
+    const magnet = new THREE.Mesh(new THREE.CylinderGeometry(MAG / 2, MAG / 2, 20, 48), ferrite);
+    magnet.rotation.x = Math.PI / 2; magnet.position.z = -67; g.add(magnet);
+    const plate = new THREE.Mesh(new THREE.CylinderGeometry(MAG / 2 + 1, MAG / 2 + 1, 3, 48), steel);
+    plate.rotation.x = Math.PI / 2; plate.position.z = -78.5; g.add(plate);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    return g;
+  }
+
+  /** The port tube: a straight pipe with a flared lip on the outside end. */
+  function buildPort() {
+    const ri = S.portID / 2, ro = ri + S.wall;                   // inside and outside radius
+    const flare = CONFIG.port.flareLip - 3, lip = 3, flareDepth = 12, zFront = 0.4;
+    const L = S.portLen;
+    // Profile from the inner end of the tube, up the bore, out along the flare, then back down the outside.
+    const pts = [[ro, -L], [ri, -L], [ri, zFront - flareDepth]];
+    for (let k = 1; k <= 10; k++) { const s = k / 10; pts.push([ri + flare * s * s, zFront - flareDepth + flareDepth * s]); }
+    pts.push([ri + flare + lip, zFront], [ri + flare + lip, zFront - 1.5], [ro, zFront - 3], [ro, -L]);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.5, metalness: 0.1, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(lathe(pts, 72), mat);
+    m.castShadow = true;
+    return m;
+  }
+
+  /** Add one wood panel to the box group, with its grain direction and a texture offset. */
+  function addPanel(geo, grain, mat, name, off) {
+    applyWoodUV(geo, grain, off);
+    const m = new THREE.Mesh(geo, mat);
+    m.castShadow = true; m.receiveShadow = true; m.name = name;
+    group.add(m); return m;
+  }
+
+  /** Rebuild the whole box from the state: six panels, the driver and the port. Origin is the box center. */
+  function rebuild() {
+    if (!hasGL) return;
+    disposeGroup(group);
+    const W = S.W, H = S.H, D = S.D, t = S.t, Di = D - 2 * t, Hi = H - 2 * t;
+    const mat = new THREE.MeshStandardMaterial({ map: woodTexture(S.finish), roughness: 0.6, metalness: 0 });
+    const longer = (a, b, aAxis, bAxis) => (a >= b ? aAxis : bAxis);   // grain runs along a panel's longer side
+    const offset = (n) => [(n * 0.37) % 1, (n * 0.61) % 1];
+
+    // Front baffle: a flat sheet with a driver hole and a port hole cut out.
+    const shape = new THREE.Shape();
+    shape.moveTo(-W / 2, -H / 2); shape.lineTo(W / 2, -H / 2); shape.lineTo(W / 2, H / 2); shape.lineTo(-W / 2, H / 2); shape.lineTo(-W / 2, -H / 2);
+    const driverHole = new THREE.Path(); driverHole.absarc(0, H / 2 - S.drvTop, S.cutout / 2, 0, Math.PI * 2, true);
+    const portHole = new THREE.Path(); portHole.absarc(0, H / 2 - S.portTop, (S.portID + 2 * S.wall) / 2, 0, Math.PI * 2, true);
+    shape.holes.push(driverHole, portHole);
+    const front = new THREE.ExtrudeGeometry(shape, { depth: t, bevelEnabled: false, curveSegments: 64 });
+    front.translate(0, 0, D / 2 - t);
+    addPanel(front, longer(H, W, 'y', 'x'), mat, 'front', offset(1));
+
+    // Back, top, bottom and the two sides. The top, bottom and sides fit between the front and back.
+    const back = new THREE.BoxGeometry(W, H, t); back.translate(0, 0, -D / 2 + t / 2);
+    addPanel(back, longer(H, W, 'y', 'x'), mat, 'back', offset(2));
+    const top = new THREE.BoxGeometry(W, t, Di); top.translate(0, H / 2 - t / 2, 0);
+    addPanel(top, longer(Di, W, 'z', 'x'), mat, 'top', offset(3));
+    const bottom = new THREE.BoxGeometry(W, t, Di); bottom.translate(0, -H / 2 + t / 2, 0);
+    addPanel(bottom, longer(Di, W, 'z', 'x'), mat, 'bottom', offset(4));
+    const sideL = new THREE.BoxGeometry(t, Hi, Di); sideL.translate(-W / 2 + t / 2, 0, 0);
+    addPanel(sideL, longer(Hi, Di, 'y', 'z'), mat, 'sideL', offset(5));
+    const sideR = new THREE.BoxGeometry(t, Hi, Di); sideR.translate(W / 2 - t / 2, 0, 0);
+    const sideRMesh = addPanel(sideR, longer(Hi, Di, 'y', 'z'), mat, 'sideR', offset(6));
+    sideRMesh.visible = !S.cutaway;                                    // the cutaway view hides the right side
+
+    // Driver and port, placed on the front face.
+    const driver = buildDriver(); driver.position.set(0, H / 2 - S.drvTop, D / 2); group.add(driver);
+    const port = buildPort(); port.position.set(0, H / 2 - S.portTop, D / 2); group.add(port);
+
+    ground.position.y = -H / 2 - 0.6;
+    buildDims();
+    dirty = true;
+  }
+
+  /* ---------- Dimension lines: a width, height and depth line with end ticks, labelled by HTML tags ---------- */
+  const dimAnchor = {};   // filled in by buildDims()   // where each label sits in 3D
+
+  /** Draw the three dimension lines just outside the box and record where their labels belong. */
+  function buildDims() {
+    if (!hasGL) return;
+    disposeGroup(dimGroup);
+    const W = S.W, H = S.H, D = S.D, off = CONFIG.view.dimOffset, tick = 6, pts = [];
+    const seg = (a, b) => { pts.push(a[0], a[1], a[2], b[0], b[1], b[2]); };
+    // Width: along the bottom of the front face.
+    let y = -H / 2 - off, z = D / 2;
+    seg([-W / 2, y, z], [W / 2, y, z]); seg([-W / 2, y - tick, z], [-W / 2, y + tick, z]); seg([W / 2, y - tick, z], [W / 2, y + tick, z]);
+    dimAnchor.W = new THREE.Vector3(0, y, z);
+    // Height: along the left edge of the front face.
+    let x = -W / 2 - off; z = D / 2;
+    seg([x, -H / 2, z], [x, H / 2, z]); seg([x - tick, -H / 2, z], [x + tick, -H / 2, z]); seg([x - tick, H / 2, z], [x + tick, H / 2, z]);
+    dimAnchor.H = new THREE.Vector3(x, 0, z);
+    // Depth: along the bottom right edge.
+    x = W / 2 + off; y = -H / 2 - off;
+    seg([x, y, -D / 2], [x, y, D / 2]); seg([x - tick, y, -D / 2], [x + tick, y, -D / 2]); seg([x - tick, y, D / 2], [x + tick, y, D / 2]);
+    dimAnchor.D = new THREE.Vector3(x, y, 0);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    dimGroup.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: cssColor('--accent') })));
+  }
+
+  let projected = null;       // scratch vector, created on first use so the page still loads without Three.js
+  /** Move an HTML dimension label to the screen position of its 3D anchor, hiding it if it is behind the camera. */
+  function placeLabel(el, anchor) {
+    projected = (projected || new THREE.Vector3()).copy(anchor).project(camera);
+    const w = $('stage').clientWidth, h = $('stage').clientHeight;
+    el.style.display = S.dims && projected.z < 1 ? '' : 'none';
+    el.style.left = ((projected.x * 0.5 + 0.5) * w) + 'px';
+    el.style.top = ((-projected.y * 0.5 + 0.5) * h) + 'px';
+  }
+
+  /** Draw one frame. */
+  function render() {
+    dimGroup.visible = S.dims;
+    camera.updateMatrixWorld();
+    placeLabel($('dimW'), dimAnchor.W); placeLabel($('dimH'), dimAnchor.H); placeLabel($('dimD'), dimAnchor.D);
+    renderer.render(scene, camera);
+  }
+
+  /* ---------- Update loop and startup ---------- */
+  let pending = false, lastKey = '';
+
+  /** Call after any state change: redraw the text now, and rebuild the 3D model on the next frame if its inputs changed. */
+  function changed() {
+    refresh();
+    if (!pending) {
+      pending = true;
+      requestAnimationFrame(() => {
+        pending = false;
+        const key = [S.W, S.H, S.D, S.t, S.portID, S.portLen, S.wall, S.drvTop, S.portTop, S.cutout, S.finish, S.cutaway].join('|');
+        if (key !== lastKey) { lastKey = key; rebuild(); }
+        dirty = true;
+      });
+    }
+  }
+
+  syncUnits();
+  refresh();
+  if (typeof THREE === 'undefined' || !THREE.OrbitControls) { $('glmsg').hidden = false; }
+  else { initGL(); lastKey = ''; changed(); }
+})();
+</script>
+
+</body></html>
